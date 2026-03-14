@@ -11,6 +11,9 @@ importers:
       acode-plugin-types:
         specifier: ^1.11.7-patch.2
         version: 1.11.7-patch.2
+      diff:
+        specifier: ^8.0.3
+        version: 8.0.3
       html-tag-js:
         specifier: ^2.4.15
         version: 2.4.16
@@ -186,6 +189,10 @@ packages:
   core-util-is@1.0.3:
     resolution: {integrity: sha512-ZQBvi1DcpJ4GDqanjucZ2Hj3wEO5pZDS89BWbkcrvdxksJorwUDDZamX9ldFkp9aw2lmBDLgkObEA4DWNJ9FYQ==}
 
+  diff@8.0.3:
+    resolution: {integrity: sha512-qejHi7bcSD4hQAZE0tNAawRK1ZtafHDmMTMkrrIGgSLl7hTnQHmKCeB45xAcbfTqK2zowkM3j3bHt/4b/ARbYQ==}
+    engines: {node: '>=0.3.1'}
+
   esbuild@0.25.12:
     resolution: {integrity: sha512-bbPBYYrtZbkt6Os6FiTLCTFxvq4tt3JKall1vRwshA3fdVztsLAatFaZobhkBC8/BrPetoa0oksYoKXoG4ryJg==}
     engines: {node: '>=18'}
@@ -313,6 +320,8 @@ snapshots:
   acode-plugin-types@1.11.7-patch.2: {}
 
   core-util-is@1.0.3: {}
+
+  diff@8.0.3: {}
 
   esbuild@0.25.12:
     optionalDependencies:

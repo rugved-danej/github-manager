@@ -6,9 +6,10 @@
   "repository": "https://github.com/Acode-Foundation/acode-plugin.git",
   "author": "Acode Foundation",
   "license": "MIT",
-  "packageManager": "pnpm@10.32.1", 
+  "packageManager": "pnpm@10.32.1",
   "dependencies": {
     "acode-plugin-types": "^1.11.7-patch.2",
+    "diff": "^8.0.3",
     "html-tag-js": "^2.4.15"
   },
   "devDependencies": {

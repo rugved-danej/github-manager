@@ -94,7 +94,10 @@ export class GithubSidebar {
               Github Manager
               <span id="gh-offline-indicator" class="gh-badge gh-badge-offline" style="display: ${isOffline ? 'inline-block' : 'none'};">Offline</span>
             </h3>
-            <button id="gh-logout-btn" class="gh-btn gh-btn-danger" style="padding: 4px 8px; font-size: 11px;">Logout</button>
+            <div style="display: flex; gap: 6px;">
+              <button id="gh-clear-cache-btn" class="gh-btn gh-btn-secondary" style="padding: 4px 8px; font-size: 11px;" title="Clear API Cache">Clear Cache</button>
+              <button id="gh-logout-btn" class="gh-btn gh-btn-danger" style="padding: 4px 8px; font-size: 11px;">Logout</button>
+            </div>
           </div>
           
           <details class="gh-dropdown" id="details-repos" ${reposOpen ? 'open' : ''}>
@@ -112,6 +115,16 @@ export class GithubSidebar {
 
       scrollContainer.querySelector('#details-repos').addEventListener('toggle', (e) => localStorage.setItem('gh_repos_open', e.target.open));
       scrollContainer.querySelector('#details-gists').addEventListener('toggle', (e) => localStorage.setItem('gh_gists_open', e.target.open));
+      
+      scrollContainer.querySelector('#gh-clear-cache-btn').addEventListener('click', () => {
+        try { 
+          indexedDB.deleteDatabase('GitHubManagerCache'); 
+          window.toast('Cache Cleared! Re-open repos to fetch fresh data.', 3000);
+        } catch(e) {
+          window.toast('Failed to clear cache.', 2000);
+        }
+      });
+      
       scrollContainer.querySelector('#gh-logout-btn').addEventListener('click', () => this.logout());
 
       this.repoManager.render(scrollContainer.querySelector('#repos-container'));

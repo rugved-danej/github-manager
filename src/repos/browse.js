@@ -60,18 +60,26 @@ export async function openRepo(manager, owner, repo, path = '', branch = '') {
 }
 
 export async function openFile(manager, item) {
-  if (item.name.match(/\.(png|jpe?g|gif|ico|zip|pdf|exe|bin|apk|mp3|mp4)$/i)) {
+  if (item.name.match(/\.(png|jpe?g|gif|ico|zip|pdf|exe|bin|apk|mp3|mp4|ttf|woff|woff2|eot)$/i)) {
     acode.alert('Error', 'Cannot open binary files in the editor.');
     return;
   }
 
   try {
     window.toast('Downloading...', 2000);
-    const res = await fetch(item.download_url);
-    const text = await res.text();
+    
+    const text = await manager.api.downloadBlob(
+      manager.currentRepo.owner,
+      manager.currentRepo.repo,
+      item.sha,
+      false
+    );
+    
     acode.newEditorFile(item.name, { text, isUnsaved: false, render: true });
     window.toast(`Opened ${item.name}`, 2000);
-  } catch (err) { acode.alert('Error', 'Could not download file'); }
+  } catch (err) { 
+    acode.alert('Error', 'Could not download file: ' + err.message); 
+  }
 }
 
 export async function handleCreateBranch(manager) {

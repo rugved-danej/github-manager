@@ -157,33 +157,50 @@ export class GitHubAPI {
     return this._fetchWithCache(`${this.baseUrl}/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`);
   }
 
-    async downloadBlob(owner, repo, sha, isBinary = false) {
+  async downloadBlob(owner, repo, sha, isBinary = false) {
     const url = `${this.baseUrl}/repos/${owner}/${repo}/git/blobs/${sha}`;
-    
-    if (!isBinary) {
-      // 1. Fetch as JSON instead of forcing raw text stringification
-      const data = await this._fetchWithCache(url, false);
+    const cacheKey = `blob_${sha}`;
+
+    let data = await CacheDB.get(cacheKey);
+
+    if (!data) {
+      const res = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${this.token}`,
+          'Accept': 'application/vnd.github.v3.raw'
+        }
+      });
+      if (!res.ok) throw new Error(`Failed to download file with SHA: ${sha}`);
       
-      // 2. Decode the base64 content back into a standard string safely handling UTF-8
-      const binaryStr = atob(data.content.replace(/\n/g, ''));
-      const bytes = new Uint8Array(binaryStr.length);
-      for (let i = 0; i < binaryStr.length; i++) {
-        bytes[i] = binaryStr.charCodeAt(i);
-      }
-      return new TextDecoder('utf-8').decode(bytes);
+      data = await res.arrayBuffer();
+      await CacheDB.set(cacheKey, data);
     }
 
-    // Binary files handle the raw response correctly using the .raw accept header
-    const res = await fetch(url, {
-      headers: {
-        'Authorization': `Bearer ${this.token}`,
-        'Accept': 'application/vnd.github.v3.raw'
+    if (!isBinary) {
+      let text = typeof data === 'string' ? data : new TextDecoder('utf-8').decode(data);
+      
+      if (text.trim().startsWith('{') && text.includes('"base64"')) {
+        try {
+          const json = JSON.parse(text);
+          if (json.content && json.encoding === 'base64') {
+            const binaryStr = atob(json.content.replace(/\n/g, ''));
+            const bytes = new Uint8Array(binaryStr.length);
+            for (let i = 0; i < binaryStr.length; i++) {
+              bytes[i] = binaryStr.charCodeAt(i);
+            }
+            text = new TextDecoder('utf-8').decode(bytes);
+          }
+        } catch (e) {}
       }
-    });
-    if (!res.ok) throw new Error(`Failed to download file with SHA: ${sha}`);
-    return res.arrayBuffer();
-  }
+      return text;
+    }
 
+    if (isBinary && typeof data === 'string') {
+        return new TextEncoder().encode(data).buffer;
+    }
+
+    return data;
+  }
 
   async commitMultipleFiles(owner, repo, branch, message, files) {
     const refRes = await fetch(`${this.baseUrl}/repos/${owner}/${repo}/git/refs/heads/${branch}`, { headers: this.getHeaders() });

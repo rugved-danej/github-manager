@@ -1,3 +1,5 @@
+import { showDiffViewer } from './diff.js';
+
 export async function handlePushLocal(manager, repo) {
   const fileBrowser = acode.require('fileBrowser');
   const fsOperation = acode.require('fsOperation');
@@ -81,11 +83,41 @@ export async function handlePushLocal(manager, repo) {
       return files;
     };
 
-    const allFiles = await readDirRecursive(dest.url);
+    let allFiles = await readDirRecursive(dest.url);
     
     if (allFiles.length === 0) {
       acode.alert('Info', 'Everything is up-to-date. No changed files found to push.');
       return;
+    }
+
+    const review = await acode.confirm('Review Changes', `Found ${allFiles.length} file(s) changed locally. Do you want to review the diffs before pushing?`);
+    
+    if (review) {
+       let filesToPush = [];
+       for (let f of allFiles) {
+           const remoteSha = remoteFiles[f.path];
+           let remoteContent = '';
+           if (remoteSha) {
+               window.toast(`Fetching remote for ${f.path}...`, 1000);
+               remoteContent = await manager.api.downloadBlob(repo.owner.login, repo.name, remoteSha, false);
+           }
+           
+           const choice = await showDiffViewer(f.path, f.content, remoteContent);
+           
+           if (choice === 'local') {
+               filesToPush.push(f);
+           } else if (choice === 'remote') {
+           } else {
+               window.toast('Push cancelled.', 2000);
+               return;
+           }
+       }
+       
+       allFiles = filesToPush;
+       if (allFiles.length === 0) {
+           window.toast('No files approved for pushing.', 2000);
+           return;
+       }
     }
 
     window.toast(`Committing ${allFiles.length} changed files...`, 2000);

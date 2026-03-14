@@ -5,8 +5,9 @@ A powerful, all-in-one GitHub integration for Acode. Manage your Gists and Repos
 ## 🚀 Features
 
 ### 📦 Repository Management
+- **Conflict Management**: Integrated **Diff Viewer** allows you to see exactly what changed before you Pull or Push. Resolve conflicts by choosing between local or remote versions.
 - **Smart Cloning & Pulling**: Sync remote repositories to local storage with visual progress bars. Includes `.git/config` generation for Termux compatibility.
-- **Delta Sync Pushing**: Recursively uploads local folders using Git Trees API, automatically respecting `.gitignore` rules.
+- **Delta Sync Pushing**: Recursively uploads local folders using Git Trees API. Now includes a **Review Mode** to verify changes before syncing.
 - **Branch Control**: Create, delete, and switch branches through a native dropdown menu.
 - **Quick Commit**: Use `Ctrl-Shift-G` to instantly commit your current editor tab to GitHub.
 - **Pinning**: Keep your most-used projects at the top of your list.

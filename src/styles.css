@@ -71,3 +71,148 @@
 .gh-progress-text { font-size: 11px; color: var(--gh-text-muted); margin-bottom: 6px; font-family: monospace; display: block; }
 .gh-progress-bar-bg { width: 100%; height: 6px; background-color: var(--gh-btn-bg); border-radius: 3px; overflow: hidden; }
 .gh-progress-bar-fill { height: 100%; background-color: var(--gh-btn-primary); transition: width 0.3s ease; }
+
+#gh-diff-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: var(--gh-bg);
+  z-index: 999999;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: sans-serif;
+}
+
+.gh-diff-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  background: var(--gh-btn-bg);
+  border-bottom: 1px solid var(--gh-border);
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+}
+
+.gh-diff-header > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+}
+
+.gh-diff-header > div:last-child {
+  justify-content: flex-end;
+}
+
+#gh-diff-close {
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: var(--gh-btn-hover);
+  color: var(--gh-text);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.gh-diff-stats {
+  font-size: 12px;
+  font-family: monospace;
+  background: var(--gh-bg-secondary);
+  padding: 4px 8px;
+  border-radius: 12px;
+  border: 1px solid var(--gh-border);
+  display: flex;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.gh-diff-split-view {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  background: var(--gh-bg-secondary);
+}
+
+.gh-diff-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid var(--gh-border);
+  min-width: 50%;
+}
+
+.gh-diff-pane:last-child {
+  border-right: none;
+}
+
+.gh-diff-pane-title {
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gh-text-muted);
+  background: var(--gh-btn-bg);
+  border-bottom: 1px solid var(--gh-border);
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.gh-diff-code {
+  flex: 1;
+  overflow: auto;
+  font-family: monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre;
+}
+
+.gh-diff-row {
+  display: flex;
+  min-height: 1.5em;
+}
+
+.gh-diff-num {
+  width: 40px;
+  flex-shrink: 0;
+  text-align: right;
+  padding-right: 8px;
+  color: var(--gh-text-muted);
+  background: var(--gh-bg);
+  border-right: 1px solid var(--gh-border);
+  user-select: none;
+}
+
+.gh-diff-add, .gh-diff-rem, .gh-diff-line, .gh-diff-empty {
+  padding-left: 8px;
+  padding-right: 8px;
+  flex: 1;
+}
+
+.gh-diff-add-bg {
+  background-color: rgba(46, 160, 67, 0.15);
+}
+
+.gh-diff-rem-bg {
+  background-color: rgba(248, 81, 73, 0.15);
+}
+
+.gh-diff-add {
+  color: #3fb950;
+}
+
+.gh-diff-rem {
+  color: #f85149;
+}
+
+.gh-diff-line {
+  color: var(--gh-text);
+}

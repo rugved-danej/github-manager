@@ -1,3 +1,5 @@
+import { showDiffViewer } from './diff.js';
+
 export async function handlePullLocal(manager, repo) {
   const fileBrowser = acode.require('fileBrowser');
   const fsOperation = acode.require('fsOperation');
@@ -87,12 +89,25 @@ export async function handlePullLocal(manager, repo) {
 
     if (conflictFiles.length > 0) {
        progressContainer.remove();
-       const confirm = await acode.confirm('Conflict Warning', `Found ${conflictFiles.length} local file(s) that differ from the remote. Overwrite them?`);
-       if (!confirm) {
-           window.toast('Pull cancelled.', 2000);
-           return;
+       window.toast('Conflicts detected! Opening Diff Viewer...', 2000);
+
+       for (let f of conflictFiles) {
+           const localFileUrl = dest.url + (dest.url.endsWith('/') ? '' : '/') + f.path;
+           const localContent = await fsOperation(localFileUrl).readFile('utf8');
+           
+           window.toast(`Fetching remote for ${f.path}...`, 1000);
+           const remoteContent = await manager.api.downloadBlob(repo.owner.login, repo.name, f.sha, false);
+
+           const choice = await showDiffViewer(f.path, localContent, remoteContent);
+
+           if (choice === 'remote') {
+               filesToDownload.push(f);
+           } else if (choice === 'local') {
+           } else {
+               window.toast('Pull cancelled by user.', 2000);
+               return; 
+           }
        }
-       filesToDownload.push(...conflictFiles);
        if (targetCard) targetCard.appendChild(progressContainer);
     }
 

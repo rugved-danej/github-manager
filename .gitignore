@@ -4,4 +4,4 @@ dist
 documentation
 .docignore
 package-lock.json
-yarn.lock
+yarn.lockplugin.zip

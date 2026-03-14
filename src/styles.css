@@ -1,0 +1,73 @@
+:root {
+  --gh-bg: #0d1117;
+  --gh-bg-secondary: #161b22;
+  --gh-border: #30363d;
+  --gh-text: #c9d1d9;
+  --gh-text-muted: #8b949e;
+  --gh-link: #58a6ff;
+  --gh-btn-bg: #21262d;
+  --gh-btn-border: rgba(240, 246, 252, 0.1);
+  --gh-btn-hover: #30363d;
+  --gh-btn-primary: #238636;
+  --gh-btn-primary-hover: #2ea043;
+}
+.gh-scroll { max-height: 100%; overflow-y: auto; background-color: var(--gh-bg); color: var(--gh-text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; box-sizing: border-box; }
+.gh-scroll * { box-sizing: border-box; }
+.gh-container { padding: 12px; }
+.gh-title { font-weight: 600; font-size: 15px; color: var(--gh-text); display: flex; align-items: center; gap: 8px; }
+.gh-mb-10 { margin-bottom: 10px; }
+.gh-mt-15 { margin-top: 15px; }
+.gh-text-success { color: #3fb950; font-size: 12px; margin-bottom: 10px; }
+.gh-text-muted { font-size: 12px; color: var(--gh-text-muted); margin-bottom: 10px; text-align: center; }
+.gh-text-link { color: var(--gh-link); text-decoration: none; font-weight: 600; }
+.gh-text-link:hover { text-decoration: underline; }
+.gh-btn { padding: 6px 12px; font-size: 13px; font-weight: 500; color: var(--gh-text); background-color: var(--gh-btn-bg); border: 1px solid var(--gh-btn-border); border-radius: 6px; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; white-space: nowrap; gap: 6px; }
+.gh-btn:hover { background-color: var(--gh-btn-hover); border-color: #8b949e; }
+.gh-btn-block { width: 100%; }
+.gh-btn-danger { color: #f85149; }
+.gh-btn-danger:hover { background-color: #b62324; color: #fff; border-color: #b62324; }
+.gh-btn-success { background-color: var(--gh-btn-primary); color: #fff; border-color: var(--gh-btn-border); }
+.gh-btn-success:hover { background-color: var(--gh-btn-primary-hover); }
+.gh-btn-github { background-color: var(--gh-btn-primary); color: white; border: 1px solid var(--gh-btn-border); gap: 8px; font-weight: 600; }
+.gh-btn-github:hover { background-color: var(--gh-btn-primary-hover); }
+.gh-dropdown { margin-bottom: 12px; border: 1px solid var(--gh-border); border-radius: 6px; background: var(--gh-bg); }
+.gh-dropdown-summary { padding: 8px 12px; font-weight: 600; font-size: 14px; color: var(--gh-text); cursor: pointer; list-style: none; display: flex; align-items: center; background: var(--gh-bg-secondary); border-radius: 6px; user-select: none; }
+.gh-dropdown-summary::-webkit-details-marker { display: none; }
+.gh-dropdown-summary::before { content: '▶'; font-size: 10px; margin-right: 8px; color: var(--gh-text-muted); transition: 0.2s; }
+.gh-dropdown[open] .gh-dropdown-summary { border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom: 1px solid var(--gh-border); }
+.gh-dropdown[open] .gh-dropdown-summary::before { transform: rotate(90deg); }
+.gh-dropdown-content { padding: 8px; }
+.gh-input { width: 100%; padding: 6px 10px; font-size: 13px; color: var(--gh-text); background-color: var(--gh-bg); border: 1px solid var(--gh-border); border-radius: 6px; margin-bottom: 12px; }
+.gh-input:focus { border-color: var(--gh-link); outline: none; box-shadow: 0 0 0 3px rgba(88,166,255,0.3); }
+.gh-details { margin-bottom: 12px; font-size: 13px; color: var(--gh-text-muted); background: var(--gh-bg-secondary); border: 1px solid var(--gh-border); padding: 10px; border-radius: 6px; }
+.gh-summary { cursor: pointer; color: var(--gh-text); font-weight: 600; outline: none; list-style: none; display: flex; align-items: center; }
+.gh-summary::-webkit-details-marker { display: none; }
+.gh-summary::before { content: '▶'; font-size: 10px; margin-right: 8px; color: var(--gh-text-muted); transition: 0.2s; }
+.gh-details[open] .gh-summary::before { transform: rotate(90deg); }
+.gh-gist-card { padding: 10px; border: 1px solid var(--gh-border); border-radius: 6px; margin-bottom: 10px; background: var(--gh-bg-secondary); overflow: hidden; }
+.gh-gist-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; width: 100%; }
+.gh-gist-title { color: var(--gh-link); font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; display: flex; align-items: center; gap: 4px; }
+.gh-badge { flex-shrink: 0; font-size: 10px; font-weight: 500; padding: 1px 6px; border-radius: 2em; border: 1px solid var(--gh-border); line-height: 14px; }
+.gh-badge-public { color: var(--gh-text-muted); border-color: var(--gh-border); }
+.gh-badge-private { color: #e3b341; border-color: rgba(227, 179, 65, 0.4); }
+.gh-badge-offline { background-color: #d29922; color: #161b22; border-color: rgba(210, 153, 34, 0.4); margin-left: 8px; }
+.gh-gist-desc { margin: 0; color: var(--gh-text-muted); font-size: 11px; display: flex; align-items: center; gap: 4px; }
+.gh-gist-actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.gh-gist-action-btn { flex: 1; padding: 6px 4px; font-size: 11px; font-weight: 500; text-align: center; min-width: 30%; display: flex; align-items: center; justify-content: center; gap: 4px; }
+.gh-gist-files { margin-top: 8px; border-top: 1px solid var(--gh-border); padding-top: 6px; }
+.gh-gist-file { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; gap: 8px; border-bottom: 1px dashed rgba(48,54,61, 0.5); }
+.gh-gist-file:last-child { border-bottom: none; }
+.gh-gist-file-name { font-size: 12px; color: var(--gh-text); display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+.gh-gist-file-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.gh-btn-icon { padding: 2px 6px; font-size: 11px; border-radius: 4px; background: transparent; color: var(--gh-text-muted); border: 1px solid transparent; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; }
+.gh-btn-icon:hover { background: var(--gh-btn-hover); color: var(--gh-text); border-color: var(--gh-border); }
+.gh-btn-icon-danger:hover { color: #f85149; }
+.gh-btn-icon-primary:hover { color: var(--gh-link); border-color: var(--gh-border); }
+.gh-btn-icon-success:hover { color: #3fb950; border-color: var(--gh-border); }
+.gh-load-more { margin-top: 12px; margin-bottom: 12px; display: none; }
+.gh-icon { display: inline-flex; flex-shrink: 0; vertical-align: middle; width: 16px; height: 16px; pointer-events: none; }
+.gh-gist-file-name span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 16px; }
+.gh-progress-wrapper { margin-top: 12px; padding: 8px; background: var(--gh-bg); border: 1px solid var(--gh-border); border-radius: 6px; }
+.gh-progress-text { font-size: 11px; color: var(--gh-text-muted); margin-bottom: 6px; font-family: monospace; display: block; }
+.gh-progress-bar-bg { width: 100%; height: 6px; background-color: var(--gh-btn-bg); border-radius: 3px; overflow: hidden; }
+.gh-progress-bar-fill { height: 100%; background-color: var(--gh-btn-primary); transition: width 0.3s ease; }

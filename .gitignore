@@ -1,0 +1,7 @@
+node_modules
+dist.zip
+dist
+documentation
+.docignore
+package-lock.json
+yarn.lock

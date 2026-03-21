@@ -59,40 +59,46 @@ if (window.acode) {
   });
 
   acode.setPluginUnmount(plugin.id, async () => {
-    const editorManager = window.editorManager || acode.require('editorManager');
-    if (editorManager && editorManager.editor) {
-      editorManager.editor.commands.removeCommand('Github Manager: Quick Commit');
-    }
-
-    const sideBarApps = acode.require('sidebarApps');
-    if (sideBarApps) {
-      sideBarApps.remove(sidebar.appId);
-    }
-
-    await sidebar.destroy();
-    
-    const link = document.getElementById('github-manager-styles');
-    if (link) link.remove();
-
-    localStorage.removeItem('gh_repos_open');
-    localStorage.removeItem('gh_gists_open');
-    localStorage.removeItem('gh_pinned_repos');
-    localStorage.removeItem('github_manager_token');
-
+    // 1. Safe Command Removal
     try {
+      const editorManager = window.editorManager || acode.require('editorManager');
+      if (editorManager && editorManager.editor && editorManager.editor.commands) {
+        editorManager.editor.commands.removeCommand('Github Manager: Quick Commit');
+      }
+    } catch(e) {}
+
+    // 2. Safe Sidebar Destruction
+    try {
+      await sidebar.destroy();
+    } catch(e) {}
+    
+    // 3. Safe CSS Removal
+    try {
+      const link = document.getElementById('github-manager-styles');
+      if (link) link.remove();
+    } catch(e) {}
+
+    // 4. Storage cleanup
+    try {
+      localStorage.removeItem('gh_repos_open');
+      localStorage.removeItem('gh_gists_open');
+      localStorage.removeItem('gh_pinned_repos');
+      localStorage.removeItem('github_manager_token');
       indexedDB.deleteDatabase('GitHubManagerCache');
     } catch(e) {}
 
-    const keychain = acode.require('keychain');
     try {
+      const keychain = acode.require('keychain');
       if (keychain) await keychain.delete('github_manager_auth', 'access_token');
     } catch(e) {}
 
-    const appSettings = acode.require('settings');
-    const currentSettings = appSettings.value;
-    if (currentSettings[plugin.id]) {
-      delete currentSettings[plugin.id];
-      appSettings.update(currentSettings);
-    }
+    try {
+      const appSettings = acode.require('settings');
+      const currentSettings = appSettings.value;
+      if (currentSettings[plugin.id]) {
+        delete currentSettings[plugin.id];
+        appSettings.update(currentSettings);
+      }
+    } catch(e) {}
   });
 }

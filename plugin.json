@@ -3,7 +3,7 @@
   "id": "dev.rugved.githubmanager",
   "name": "Github Manager",
   "main": "main.js",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "repository": "https://github.com/rugved-danej/github-manager.git",
   "readme": "readme.md",
   "changelogs": "changelog.md",

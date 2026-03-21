@@ -49,6 +49,10 @@ export class GithubSidebar {
     window.addEventListener('online', this.handleOnline);
 
     sideBarApps.add('icon github', this.appId, 'Github Manager', (container) => {
+        container.classList.add('scroll');
+        container.style.height = '100%';
+        container.style.overflowY = 'auto';
+        
         this.container = container;
         this.render();
     }, false, () => this.render());
@@ -74,7 +78,9 @@ export class GithubSidebar {
     this.container.innerHTML = '';
 
     const scrollContainer = document.createElement('div');
-    scrollContainer.className = 'gh-scroll';
+    scrollContainer.className = 'gh-scroll scroll';
+    scrollContainer.style.height = '100%';
+    scrollContainer.style.overflowY = 'auto';
 
     if (token) {
       if (!this.api) {
@@ -294,10 +300,32 @@ export class GithubSidebar {
   }
 
   async destroy() {
+    // 1. Clean up event listeners
     window.removeEventListener('offline', this.handleOffline);
     window.removeEventListener('online', this.handleOnline);
+    
+    // 2. Clear DOM container
     if (this.container) {
       this.container.innerHTML = '';
     }
+    sideBarApps.remove(this.appId);
+
+    // 4. Forcefully remove the icon from the DOM (Fixes the zombie icon issue)
+    try {
+      const appIcon = document.querySelector('.icon.github');
+      if (appIcon) {
+        // Acode usually wraps sidebar icons in a container div/span that holds the click action.
+        // We look for the parent wrapper to remove the entire clickable block.
+        const wrapper = appIcon.closest(`[action="${this.appId}"]`) || 
+                        appIcon.closest(`[data-id="${this.appId}"]`) || 
+                        appIcon.parentElement;
+        
+        if (wrapper && wrapper !== document.body) {
+          wrapper.remove();
+        } else {
+          appIcon.remove();
+        }
+      }
+    } catch (e) {}
   }
 }

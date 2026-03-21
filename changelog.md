@@ -1,5 +1,13 @@
 # ChangeLogs
 
+## [1.2.1] - 2026-03-21
+
+### 🛠️ Fixed
+- **Safe Cleanup**: Wrapped unmount lifecycle events (command removal, sidebar destruction, CSS removal, and storage cleanup) in `try...catch` blocks to prevent unhandled exceptions during the teardown process.
+- **Sidebar Scrolling**: Added proper CSS classes and inline styles during sidebar initialization to ensure consistent vertical scrolling behavior.
+
+---
+
 ## [1.2.0] - 2026-03-14
 
 ### 🚀 Added

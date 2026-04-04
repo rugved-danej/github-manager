@@ -33,9 +33,7 @@ if (window.acode) {
     if (!appSettings.value[plugin.id]) {
       appSettings.update({ [plugin.id]: { showPrivate: true, defaultCloneDir: '' } });
     }
-  });
-
-  acode.setPluginSettings(plugin.id, {
+  }, {
     get list() {
       const appSettings = acode.require('settings');
       return [

@@ -48,12 +48,19 @@ export class GithubSidebar {
     window.addEventListener('offline', this.handleOffline);
     window.addEventListener('online', this.handleOnline);
 
+   // remove previous sidebar app so no duplicate
+   sideBarApps.remove(this.appId);
+
     // Keep the same ID but change the label to 'Github Companion'
     sideBarApps.add('icon github', this.appId, 'Github Companion', (container) => {
         container.classList.add('scroll');
         container.style.height = '100%';
         container.style.overflowY = 'auto';
-        
+
+        // i think we forgot max width, this stuff always goes beyond the container
+        container.style.width = '100%'
+        container.style.maxWidth = '100%'
+
         this.container = container;
         this.render();
     }, false, () => this.render());
@@ -81,6 +88,8 @@ export class GithubSidebar {
     const scrollContainer = document.createElement('div');
     scrollContainer.className = 'gh-scroll scroll';
     scrollContainer.style.height = '100%';
+    scrollContainer.style.width = '100%';
+    scrollContainer.style.maxWidth = '100%';
     scrollContainer.style.overflowY = 'auto';
 
     if (token) {
@@ -219,6 +228,8 @@ export class GithubSidebar {
     try {
       const appIcon = document.querySelector('.icon.github');
       if (appIcon) {
+         // funny how I'm seeing this, but this is not how it works, it still doesn't remove.
+
         // Acode usually wraps sidebar icons in a container div/span that holds the click action.
         // We look for the parent wrapper to remove the entire clickable block.
         const wrapper = appIcon.closest(`[action="${this.appId}"]`) || 

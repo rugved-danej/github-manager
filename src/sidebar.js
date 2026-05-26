@@ -48,19 +48,11 @@ export class GithubSidebar {
     window.addEventListener('offline', this.handleOffline);
     window.addEventListener('online', this.handleOnline);
 
-   // remove previous sidebar app so no duplicate
-   sideBarApps.remove(this.appId);
-
-    // Keep the same ID but change the label to 'Github Companion'
-    sideBarApps.add('icon github', this.appId, 'Github Companion', (container) => {
+    sideBarApps.add('icon github', this.appId, 'Github Manager', (container) => {
         container.classList.add('scroll');
         container.style.height = '100%';
         container.style.overflowY = 'auto';
-
-        // i think we forgot max width, this stuff always goes beyond the container
-        container.style.width = '100%'
-        container.style.maxWidth = '100%'
-
+        
         this.container = container;
         this.render();
     }, false, () => this.render());
@@ -88,8 +80,6 @@ export class GithubSidebar {
     const scrollContainer = document.createElement('div');
     scrollContainer.className = 'gh-scroll scroll';
     scrollContainer.style.height = '100%';
-    scrollContainer.style.width = '100%';
-    scrollContainer.style.maxWidth = '100%';
     scrollContainer.style.overflowY = 'auto';
 
     if (token) {
@@ -107,9 +97,13 @@ export class GithubSidebar {
         <div class="gh-container">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
             <h3 class="gh-title" style="margin: 0; display: flex; align-items: center;">
-              Github Companion
+              Github Manager
               <span id="gh-offline-indicator" class="gh-badge gh-badge-offline" style="display: ${isOffline ? 'inline-block' : 'none'};">Offline</span>
             </h3>
+            <div style="display: flex; gap: 6px;">
+              <button id="gh-clear-cache-btn" class="gh-btn gh-btn-secondary" style="padding: 4px 8px; font-size: 11px;" title="Clear API Cache">Clear Cache</button>
+              <button id="gh-logout-btn" class="gh-btn gh-btn-danger" style="padding: 4px 8px; font-size: 11px;">Logout</button>
+            </div>
           </div>
           
           <details class="gh-dropdown" id="details-repos" ${reposOpen ? 'open' : ''}>
@@ -128,6 +122,17 @@ export class GithubSidebar {
       scrollContainer.querySelector('#details-repos').addEventListener('toggle', (e) => localStorage.setItem('gh_repos_open', e.target.open));
       scrollContainer.querySelector('#details-gists').addEventListener('toggle', (e) => localStorage.setItem('gh_gists_open', e.target.open));
       
+      scrollContainer.querySelector('#gh-clear-cache-btn').addEventListener('click', () => {
+        try { 
+          indexedDB.deleteDatabase('GitHubManagerCache'); 
+          window.toast('Cache Cleared! Re-open repos to fetch fresh data.', 3000);
+        } catch(e) {
+          window.toast('Failed to clear cache.', 2000);
+        }
+      });
+      
+      scrollContainer.querySelector('#gh-logout-btn').addEventListener('click', () => this.logout());
+
       this.repoManager.render(scrollContainer.querySelector('#repos-container'));
       this.gistManager.render(scrollContainer.querySelector('#gists-container'));
 
@@ -152,22 +157,108 @@ export class GithubSidebar {
     } else {
       scrollContainer.innerHTML = `
         <div class="gh-container">
-          <h3 class="gh-title" style="margin-bottom: 16px;">Github Companion</h3>
-          <p class="gh-text-muted" style="text-align: left; margin-bottom: 16px;">You are not logged in. Please open the Github Manager page to authenticate.</p>
+          <h3 class="gh-title" style="margin-bottom: 16px;">Github Manager</h3>
+          <p class="gh-text-muted" style="text-align: left;">Authenticate to access your repositories and gists.</p>
           
-          <button id="gh-open-manager-btn" class="gh-btn gh-btn-block gh-btn-success gh-mb-10">
-            Open Github Manager
+          <div id="gh-device-flow-container">
+            <button id="gh-login-device-btn" class="gh-btn gh-btn-block gh-btn-github gh-mb-10">
+              <span class="icon github"></span> Login with GitHub
+            </button>
+            <div style="text-align: center; margin: 10px 0; color: var(--gh-text-muted); font-size: 12px;">OR</div>
+          </div>
+
+          <input type="password" id="gh-token-input" class="gh-input gh-mb-10" placeholder="Paste Personal Access Token">
+          <button id="gh-login-btn" class="gh-btn gh-btn-block gh-btn-secondary">
+            Login with Token
           </button>
+          
+          <span id="gh-generate-token-btn" class="gh-text-link" style="display: block; text-align: center; margin-top: 15px; font-size: 12px; cursor: pointer;">Generate Token Manually</span>
         </div>
       `;
       this.container.appendChild(scrollContainer);
 
-      scrollContainer.querySelector('#gh-open-manager-btn').addEventListener('click', () => {
-        const editorManager = window.editorManager || acode.require('editorManager');
-        if (editorManager && editorManager.editor && editorManager.editor.commands) {
-          editorManager.editor.commands.exec('Github Manager');
+      scrollContainer.querySelector('#gh-login-btn').addEventListener('click', () => {
+        const inputToken = scrollContainer.querySelector('#gh-token-input').value.trim();
+        this.login(inputToken);
+      });
+      
+      scrollContainer.querySelector('#gh-generate-token-btn').addEventListener('click', () => {
+        const url = 'https://github.com/settings/tokens/new?scopes=repo,gist,delete_repo';
+        if (window.system && window.system.openInBrowser) {
+          window.system.openInBrowser(url);
+        } else if (window.cordova) {
+          window.open(url, '_system');
+        } else {
+          window.open(url, '_blank');
         }
       });
+
+      scrollContainer.querySelector('#gh-login-device-btn').addEventListener('click', () => {
+        this.startDeviceFlow(scrollContainer);
+      });
+    }
+  }
+
+  async startDeviceFlow(container) {
+    const flowContainer = container.querySelector('#gh-device-flow-container');
+    flowContainer.innerHTML = `<p class="gh-text-muted">Requesting code...</p>`;
+
+    try {
+      const data = await GitHubAPI.requestDeviceCode();
+      
+      flowContainer.innerHTML = `
+        <div style="background: var(--gh-bg-secondary); border: 1px solid var(--gh-border); padding: 10px; border-radius: 6px; text-align: center; margin-bottom: 15px;">
+          <p style="font-size: 12px; margin-bottom: 8px;">Enter this code on GitHub:</p>
+          <h2 style="letter-spacing: 2px; color: var(--gh-link); margin: 0 0 10px 0;">${data.user_code}</h2>
+          <button id="gh-open-browser-btn" class="gh-btn gh-btn-block gh-btn-success">Open Browser</button>
+          <p class="gh-text-muted" style="margin-top: 8px; font-size: 10px;">Waiting for authorization...</p>
+        </div>
+      `;
+
+      container.querySelector('#gh-open-browser-btn').addEventListener('click', () => {
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(data.user_code);
+        
+        if (window.system && window.system.openInBrowser) {
+          window.system.openInBrowser(data.verification_uri);
+        } else {
+          window.open(data.verification_uri, '_system');
+        }
+        window.toast('Code copied to clipboard!', 2000);
+      });
+
+      let interval = data.interval;
+      let polling = true;
+      
+      const stopPolling = () => { polling = false; };
+      container.addEventListener('DOMNodeRemoved', stopPolling);
+
+      while (polling) {
+        await new Promise(resolve => setTimeout(resolve, interval * 1000));
+        if (!polling) break;
+
+        const pollData = await GitHubAPI.pollForToken(data.device_code);
+
+        if (pollData.access_token) {
+          polling = false;
+          window.toast('Authorization successful!', 3000);
+          this.login(pollData.access_token);
+        } else if (pollData.error === 'authorization_pending') {
+        } else if (pollData.error === 'slow_down') {
+          interval += 5; 
+        } else if (pollData.error === 'expired_token') {
+          polling = false;
+          acode.alert('Error', 'The device code expired. Please try again.');
+          this.render();
+        } else {
+          polling = false;
+          acode.alert('Error', pollData.error_description || 'Authorization failed.');
+          this.render();
+        }
+      }
+
+    } catch (err) {
+      acode.alert('Device Flow Error', String(err.message || err));
+      this.render();
     }
   }
 
@@ -189,7 +280,7 @@ export class GithubSidebar {
       this.repoManager.setApi(this.api);
       
       window.toast(`Logged in as ${user.login}`, 3000);
-      this.render(); // This ensures the sidebar updates when the page fires a login
+      this.render();
     } catch (error) {
       this.api = null; this.gistManager.setApi(null); this.repoManager.setApi(null); this.token = null;
       acode.alert('Login Failed', 'Invalid token or network error.');
@@ -205,33 +296,25 @@ export class GithubSidebar {
     
     this.api = null; this.gistManager.setApi(null); this.repoManager.setApi(null);
     window.toast('Logged out successfully', 3000);
-    this.render(); // This ensures the sidebar updates when the page fires a logout
+    this.render();
   }
 
   async destroy() {
-    // 1. Clean up event listeners
     window.removeEventListener('offline', this.handleOffline);
     window.removeEventListener('online', this.handleOnline);
     
-    // 2. Clear DOM container
     if (this.container) {
       this.container.innerHTML = '';
     }
-
-    // 3. Safely require sideBarApps and remove the app
+    
     const sideBarApps = acode.require('sidebarApps');
     if (sideBarApps) {
-      sideBarApps.remove(this.appId);
+        sideBarApps.remove(this.appId);
     }
 
-    // 4. Forcefully remove the icon from the DOM (Fixes the zombie icon issue)
     try {
       const appIcon = document.querySelector('.icon.github');
       if (appIcon) {
-         // funny how I'm seeing this, but this is not how it works, it still doesn't remove.
-
-        // Acode usually wraps sidebar icons in a container div/span that holds the click action.
-        // We look for the parent wrapper to remove the entire clickable block.
         const wrapper = appIcon.closest(`[action="${this.appId}"]`) || 
                         appIcon.closest(`[data-id="${this.appId}"]`) || 
                         appIcon.parentElement;
@@ -244,5 +327,4 @@ export class GithubSidebar {
       }
     } catch (e) {}
   }
-
 }

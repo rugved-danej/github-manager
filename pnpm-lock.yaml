@@ -19,7 +19,7 @@ importers:
         version: 2.4.16
     devDependencies:
       esbuild:
-        specifier: ^0.25.8
+        specifier: ^0.25.12
         version: 0.25.12
       jszip:
         specifier: ^3.10.1

@@ -1,5 +1,12 @@
 # ChangeLogs
 
+## [1.2.3] - 2026-05-27
+
+### 🛠️ Fixed
+- **Login Button**: Fixed the "Open Github Manager" button failure by replacing the missing editor command trigger with direct authentication methods inside the sidebar.
+
+---
+
 ## [1.2.1] - 2026-03-21
 
 ### 🛠️ Fixed

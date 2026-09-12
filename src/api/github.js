@@ -145,7 +145,40 @@ export class GitHubAPI {
   }
 
   async getBranches(owner, repo) {
-    return this._fetchWithCache(`${this.baseUrl}/repos/${owner}/${repo}/branches?per_page=100`);
+    return this._fetchWithCache(`${this.baseUrl}/repos/${owner}/${repo}/branches?per_page=100&t=${Date.now()}`);
+  }
+
+  async createBranch(owner, repo, baseBranch, newBranch) {
+    const refRes = await fetch(`${this.baseUrl}/repos/${owner}/${repo}/git/refs/heads/${baseBranch}`, { headers: this.getHeaders() });
+    if (!refRes.ok) throw new Error('Failed to get base branch reference');
+    const refData = await refRes.json();
+    const sha = refData.object.sha;
+
+    const createRes = await fetch(`${this.baseUrl}/repos/${owner}/${repo}/git/refs`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({
+        ref: `refs/heads/${newBranch}`,
+        sha: sha
+      })
+    });
+    if (!createRes.ok) {
+      const errData = await createRes.json().catch(() => ({}));
+      throw new Error(errData.message || 'Failed to create branch');
+    }
+    return createRes.json();
+  }
+
+  async deleteBranch(owner, repo, branch) {
+    const res = await fetch(`${this.baseUrl}/repos/${owner}/${repo}/git/refs/heads/${branch}`, { 
+      method: 'DELETE', 
+      headers: this.getHeaders() 
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.message || 'Failed to delete branch');
+    }
+    return true;
   }
 
   async getRepoContents(owner, repo, path = '', branch = '') {

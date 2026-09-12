@@ -94,6 +94,7 @@ export async function handleCreateBranch(manager) {
     
     window.toast('Branch created successfully!', 3000);
     
+    manager.currentBranch = newBranch;
     await manager.loadBranches(manager.currentRepo.owner, manager.currentRepo.repo);
     manager.switchBranch(newBranch);
   } catch (err) {
@@ -117,6 +118,8 @@ export async function handleDeleteBranch(manager) {
     await manager.api.deleteBranch(manager.currentRepo.owner, manager.currentRepo.repo, manager.currentBranch);
     window.toast('Branch deleted!', 3000);
     
+    manager.currentBranch = manager.currentRepo.defaultBranch;
+    await manager.loadBranches(manager.currentRepo.owner, manager.currentRepo.repo);
     manager.switchBranch(manager.currentRepo.defaultBranch);
   } catch (err) {
     acode.alert('Error Deleting Branch', err.message);

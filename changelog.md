@@ -1,5 +1,12 @@
 # ChangeLogs
 
+## [1.2.4] - 2026-09-12
+
+### 🛠️ Fixed
+- **Branch Management**: Fixed errors `createBranch is not a function` and `deleteBranch is not a function` by properly implementing them in the GitHub API wrapper.
+- **UI Refresh**: Fixed an issue where the branch dropdown wouldn't update instantly after creating or deleting a branch by bypassing the API cache and forcing a UI reload.
+
+---
 ## [1.2.3] - 2026-05-27
 
 ### 🛠️ Fixed

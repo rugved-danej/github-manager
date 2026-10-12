@@ -1,5 +1,9 @@
 import { isImageFile, getImageMime } from '../ui/icons';
-import { openImageViewer, imageToDataUrl } from '../ui/imageViewer';
+import { openInAcodeImageTab, imageToDataUrl } from '../ui/imageViewer';
+import { fluentAlert } from '../ui/dialog';
+import { showToast } from '../ui/toast';
+import { logger } from '../utils/logger';
+import { closeSidebar } from '../utils/format';
 import type { GistManager } from './manager';
 
 export async function handleOpenFile(
@@ -8,21 +12,21 @@ export async function handleOpenFile(
   filename: string
 ): Promise<void> {
   if (!manager.api) {
-    acode.alert('Error', 'API client not initialized. Please login first.');
+    fluentAlert('Error', 'API client not initialized. Please login first.');
     return;
   }
 
   try {
-    window.toast('Fetching from GitHub...', 2000);
+    showToast('Fetching from GitHub...', 'info', 2000);
     const gistData = await manager.api.getGist(gistId);
     const file = gistData.files[filename];
     if (!file) {
-      acode.alert('Error', 'File not found in gist.');
+      fluentAlert('Error', 'File not found in gist.');
       return;
     }
 
     if (isImageFile(filename)) {
-      window.toast('Loading image...', 1500);
+      showToast('Loading image...', 'info', 1500);
       const mime = getImageMime(filename);
       let imgSrc = '';
 
@@ -43,10 +47,14 @@ export async function handleOpenFile(
         imgSrc = file.raw_url;
       }
 
-      openImageViewer(filename, imgSrc, {
-        uri: `gist://${gistId}/${filename}`,
-        downloadUrl: file.raw_url
-      });
+      const uri = `gist://${gistId}/${filename}`;
+      const opened = openInAcodeImageTab(filename, imgSrc, uri);
+      if (opened) {
+        closeSidebar();
+        showToast(`Opened ${filename} in editor`, 'success', 2000);
+      } else {
+        fluentAlert('Image Error', 'Could not open image in editor tab.');
+      }
       return;
     }
 
@@ -55,9 +63,11 @@ export async function handleOpenFile(
       isUnsaved: false,
       render: true
     });
+    closeSidebar();
 
-    window.toast(`Opened ${filename} in Acode`, 2000);
+    showToast(`Opened ${filename} in editor`, 'success', 2000);
   } catch (err: any) {
-    acode.alert('Error', err.message || 'Failed to open file.');
+    logger.error('Failed to open gist file:', err);
+    fluentAlert('Error', err.message || 'Failed to open file.');
   }
 }

@@ -1,9 +1,12 @@
 import type { RepoManager } from './manager';
 import type { GitHubRepo, GitHubTreeItem } from '../types/github';
+import { fluentPrompt, fluentAlert } from '../ui/dialog';
+import { showToast } from '../ui/toast';
+import { logger } from '../utils/logger';
 
 export async function handleCloneRepo(manager: RepoManager, repo: GitHubRepo): Promise<void> {
   if (!manager.api) {
-    acode.alert('Error', 'API client not initialized. Please login first.');
+    fluentAlert('Error', 'API client not initialized. Please login first.');
     return;
   }
 
@@ -33,7 +36,12 @@ export async function handleCloneRepo(manager: RepoManager, repo: GitHubRepo): P
       const exists = await fsOperation(repoFolderUrl).exists();
       if (exists) {
         const suggestion = `${repoName}-clone`;
-        const newName = await acode.prompt('Folder exists', '', 'text', { placeholder: suggestion });
+        const newName = await fluentPrompt({
+          title: 'Folder Exists',
+          message: `A folder named "${repoName}" already exists in the selected directory. Enter a new folder name:`,
+          defaultValue: suggestion,
+          placeholder: suggestion
+        });
 
         if (newName === null) return;
 
@@ -117,10 +125,11 @@ export async function handleCloneRepo(manager: RepoManager, repo: GitHubRepo): P
 
     updateUI('Clone Complete!', 100);
     setTimeout(() => progressContainer.remove(), 3000);
-    acode.alert('Clone Complete', `Cloned successfully to:\n📁 ${repoName}`);
+    fluentAlert('Clone Complete', `Cloned successfully to:\n[ ${repoName} ]`);
   } catch (err: any) {
+    logger.error('Clone failed:', err);
     const existingProgress = targetCard?.querySelector('.gh-progress-wrapper');
     if (existingProgress) existingProgress.remove();
-    acode.alert('Clone Failed', err.message || String(err));
+    fluentAlert('Clone Failed', err.message || String(err));
   }
 }

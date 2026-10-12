@@ -1,5 +1,25 @@
 # ChangeLogs
 
+## [2.0.0] - 2026-10-12
+
+### Added
+- **Full TypeScript & Acodez Architecture**: Re-architected entire plugin into modular TypeScript with `@rvrugved/acodez` toolchain, strict type safety, and obfuscated production packaging.
+- **Direct GitHub Suite**: Dedicated management for GitHub Issues, Pull Requests, Releases, and Actions CI/CD workflows directly in Acode.
+- **Custom Structured Issue Templates**: Built-in support for structured YAML issue forms (Bug Reports, Feature Requests, Blank Issues) with interactive field validation.
+- **Enhanced Gists System**: Complete rewrite supporting multi-file Gists, custom file picker selection ("From device file picker" and "From Acode file picker"), gist starring, forking, and direct sync.
+- **Multi-Account & Organization Scope**: Switch between Personal user accounts and Organizations with dedicated icons, filtering, and org-isolated repositories.
+- **Media & Image Viewer Engine**: Full support for images and GIFs in repositories and gists with pinch-to-zoom, pan bounds, and seamless Acode editor tab integration.
+- **Native Fluent UI & Popovers**: Lightweight custom select popover menus with checkmarks, responsive 4-action card rows, 3-dots more menus, and zero horizontal scrolling.
+- **GitHub Device Authorization Flow**: One-click "Open Browser" button for hassle-free GitHub device code authorization without manual copying/switching confusion.
+- **4-Tier AuthVault**: Secure credential storage across localStorage, filesystem DATA_STORAGE, Android Keychain, and Acode settings.
+
+### Changed
+- **Star & Pin Workflow**: Re-architected starring and pinning with dedicated Lucide SVG icons, golden animated star indicators, and synchronized GitHub API state.
+- **Error-Only Console Logging**: Suppressed informational and debug noise in console, strictly logging runtime errors.
+- **Clean Zero-Comment Codebase**: Stripped all development comments and dead code across all source modules for maximum performance and lean bundle size.
+
+---
+
 ## [1.2.4] - 2026-09-12
 
 ### 🛠️ Fixed

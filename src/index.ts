@@ -1,6 +1,7 @@
 import plugin from '../plugin.json';
 import { GithubSidebar } from './sidebar';
 import { registerCommands, unregisterCommands } from './commands/index';
+import { initCustomToast, restoreOriginalToast } from './ui/toast';
 import style from './styles/main.scss';
 
 class GithubManagerPlugin {
@@ -16,20 +17,21 @@ class GithubManagerPlugin {
   ): Promise<void> {
     this.$page = $page;
 
-    // Inject styles
     const styleSheet = document.createElement('style');
     styleSheet.id = this.styleId;
     styleSheet.innerHTML = style;
     document.head.appendChild(styleSheet);
 
-    // Initialize sidebar
+    initCustomToast();
+
     this.sidebar.baseUrl = this.baseUrl;
     await this.sidebar.init();
 
-    // Register editor commands
-    registerCommands(() => this.sidebar.repoManager);
+    registerCommands(
+      () => this.sidebar.repoManager,
+      () => this.sidebar.gistManager
+    );
 
-    // Initialize plugin default settings
     const appSettings = acode.require('settings') as any;
     if (!appSettings.value[plugin.id]) {
       appSettings.update({ [plugin.id]: { showPrivate: true, defaultCloneDir: '' } });
@@ -37,19 +39,18 @@ class GithubManagerPlugin {
   }
 
   async destroy(): Promise<void> {
-    // 1. Safe Command Removal
     unregisterCommands();
 
-    // 2. Safe Sidebar Destruction
     try {
       await this.sidebar.destroy();
     } catch (e) {}
 
-    // 3. Safe CSS Removal
     try {
       const styleSheet = document.getElementById(this.styleId);
       if (styleSheet) styleSheet.remove();
     } catch (e) {}
+
+    restoreOriginalToast();
   }
 }
 

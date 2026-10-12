@@ -1,5 +1,8 @@
 import { CustomSelectComponent } from '../ui/selectMenu';
 import { lucideIcons } from '../ui/icons';
+import { fluentConfirm, fluentPrompt, fluentAlert } from '../ui/dialog';
+import { showToast } from '../ui/toast';
+import { logger } from '../utils/logger';
 import type { RepoManager } from './manager';
 
 export async function switchBranch(manager: RepoManager, newBranch: string): Promise<void> {
@@ -35,17 +38,23 @@ export async function loadBranches(manager: RepoManager, owner: string, repo: st
         });
       }
     }
-  } catch (err) {}
+  } catch (err) {
+    logger.error('Failed to load branches:', err);
+  }
 }
 
 export async function handleCreateBranch(manager: RepoManager): Promise<void> {
   if (!manager.currentRepo || !manager.api) return;
 
-  const newBranch = await acode.prompt('New Branch Name', 'feature-branch');
+  const newBranch = await fluentPrompt({
+    title: 'New Branch Name',
+    defaultValue: 'feature-branch',
+    placeholder: 'Enter branch name...'
+  });
   if (!newBranch) return;
 
   try {
-    window.toast(`Branching off ${manager.currentBranch}...`, 2000);
+    showToast(`Branching off ${manager.currentBranch}...`, 'info', 2000);
     await manager.api.createBranch(
       manager.currentRepo.owner,
       manager.currentRepo.repo,
@@ -53,13 +62,14 @@ export async function handleCreateBranch(manager: RepoManager): Promise<void> {
       newBranch
     );
 
-    window.toast('Branch created successfully!', 3000);
+    showToast('Branch created successfully!', 'success');
 
     manager.currentBranch = newBranch;
     await manager.loadBranches(manager.currentRepo.owner, manager.currentRepo.repo);
     await manager.switchBranch(newBranch);
   } catch (err: any) {
-    acode.alert('Error Creating Branch', err.message || String(err));
+    logger.error('Failed to create branch:', err);
+    fluentAlert('Error Creating Branch', err.message || String(err));
   }
 }
 
@@ -71,32 +81,35 @@ export async function handleDeleteBranch(manager: RepoManager): Promise<void> {
     manager.currentBranch === 'master' ||
     manager.currentBranch === manager.currentRepo.defaultBranch
   ) {
-    acode.alert(
+    fluentAlert(
       'Action Blocked',
       `Cannot delete the default/base branch (${manager.currentBranch}) from the app.`
     );
     return;
   }
 
-  const confirm = await acode.confirm(
-    'Delete Branch',
-    `Are you sure you want to delete branch <b>${manager.currentBranch}</b>?`
-  );
+  const confirm = await fluentConfirm({
+    title: 'Delete Branch',
+    message: `Are you sure you want to delete branch "${manager.currentBranch}"?`,
+    confirmText: 'Delete Branch',
+    danger: true
+  });
   if (!confirm) return;
 
   try {
-    window.toast('Deleting branch...', 2000);
+    showToast('Deleting branch...', 'info', 2000);
     await manager.api.deleteBranch(
       manager.currentRepo.owner,
       manager.currentRepo.repo,
       manager.currentBranch
     );
-    window.toast('Branch deleted!', 3000);
+    showToast('Branch deleted!', 'success');
 
     manager.currentBranch = manager.currentRepo.defaultBranch;
     await manager.loadBranches(manager.currentRepo.owner, manager.currentRepo.repo);
     await manager.switchBranch(manager.currentRepo.defaultBranch);
   } catch (err: any) {
-    acode.alert('Error Deleting Branch', err.message || String(err));
+    logger.error('Failed to delete branch:', err);
+    fluentAlert('Error Deleting Branch', err.message || String(err));
   }
 }

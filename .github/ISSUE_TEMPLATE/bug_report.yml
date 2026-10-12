@@ -1,0 +1,67 @@
+name: Bug Report
+description: Create a structured report to help reproduce and fix bugs
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report! Please provide as much context as possible.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the Bug
+      description: A clear and concise description of what the bug is.
+      placeholder: What happened and what did you expect instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Step-by-step instructions to reproduce the problem.
+      placeholder: |
+        1. Open sidebar and select repository...
+        2. Click on...
+        3. Observe error...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What you expected to happen under normal operation.
+      placeholder: A clear description of what should have occurred.
+    validations:
+      required: false
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Specify your Acode build version, Android OS version, and device model.
+      placeholder: "e.g., Acode v1.11.0, Android 14, Samsung Galaxy S23"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs and Screenshots
+      description: Paste any error stack traces, console output, or image links.
+      placeholder: Paste console logs or error stack trace here...
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: validations
+    attributes:
+      label: Validation Checklist
+      options:
+        - label: I have verified that no duplicate open or closed issue exists for this bug
+          required: true
+        - label: I am running the latest version of this plugin and Acode
+          required: true

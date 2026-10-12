@@ -1,0 +1,45 @@
+name: Question & Help
+description: Ask a question about setting up tokens, Git synchronization, or usage
+title: "[Question]: "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have a question or need assistance with GitHub Manager? Feel free to ask here or check [GitHub Discussions](https://github.com/rugved-danej/github-manager/discussions).
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Question / Topic
+      description: Describe what you would like to know or configure.
+      placeholder: How do I configure Termux git... / What permissions are needed for...
+    validations:
+      required: true
+
+  - type: textarea
+    id: setup_details
+    attributes:
+      label: Setup Details
+      description: Share details about your current authentication method, Git configuration, or environment.
+      placeholder: "e.g., Device code login, Termux git 2.40, Android 14..."
+    validations:
+      required: false
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Your Acode build version and Android version.
+      placeholder: "e.g., Acode v1.11.0, Android 14"
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error Messages / Logs (if applicable)
+      description: Paste any error messages or logs you received.
+      placeholder: Paste error output or logs here...
+    validations:
+      required: false

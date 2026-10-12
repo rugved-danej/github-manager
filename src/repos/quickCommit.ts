@@ -1,8 +1,11 @@
+import { fluentPrompt, fluentAlert } from '../ui/dialog';
+import { showToast } from '../ui/toast';
+import { logger } from '../utils/logger';
 import type { RepoManager } from './manager';
 
 export async function handleQuickCommit(repoManager: RepoManager | null): Promise<void> {
   if (!repoManager || !repoManager.api) {
-    acode.alert('Error', 'Please login to Github Manager first.');
+    fluentAlert('Error', 'Please login to Github Manager first.');
     return;
   }
 
@@ -10,12 +13,12 @@ export async function handleQuickCommit(repoManager: RepoManager | null): Promis
   const activeFile = editorManager ? editorManager.activeFile : null;
 
   if (!activeFile) {
-    acode.alert('Error', 'No active file open to commit.');
+    fluentAlert('Error', 'No active file open to commit.');
     return;
   }
 
   if (!repoManager.repos || repoManager.repos.length === 0) {
-    acode.alert('Error', 'No repositories loaded. Please open the Github Manager sidebar first.');
+    fluentAlert('Error', 'No repositories loaded. Please open the Github Manager sidebar first.');
     return;
   }
 
@@ -28,21 +31,30 @@ export async function handleQuickCommit(repoManager: RepoManager | null): Promis
 
   const branch = repo.default_branch || 'main';
 
-  const filePath = await acode.prompt('File path in repo (e.g. src/main.js)', activeFile.name);
+  const filePath = await fluentPrompt({
+    title: 'File Path in Repo',
+    defaultValue: activeFile.name,
+    placeholder: 'e.g. src/main.js'
+  });
   if (!filePath) return;
 
-  const message = await acode.prompt('Commit Message', `Quick commit: Update ${filePath}`);
+  const message = await fluentPrompt({
+    title: 'Commit Message',
+    defaultValue: `Quick commit: Update ${filePath}`,
+    placeholder: 'Enter commit message...'
+  });
   if (!message) return;
 
   const content = activeFile.session.getValue();
 
   try {
-    window.toast('Quick Committing...', 2000);
+    showToast('Quick Committing...', 'info', 2000);
     await repoManager.api.commitMultipleFiles(repo.owner.login, repo.name, branch, message, [
       { path: filePath, content: content }
     ]);
-    window.toast('Committed successfully!', 3000);
+    showToast('Committed successfully!', 'success');
   } catch (err: any) {
-    acode.alert('Commit Failed', err.message || String(err));
+    logger.error('Quick commit failed:', err);
+    fluentAlert('Commit Failed', err.message || String(err));
   }
 }

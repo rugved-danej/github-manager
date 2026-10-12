@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: GitHub Discussions
+    url: https://github.com/rugved-danej/github-manager/discussions
+    about: Ask questions, share ideas, showcase workflows, and get community support.
+  - name: Acode Community
+    url: https://acode.app
+    about: Connect with other Acode plugin developers and users.

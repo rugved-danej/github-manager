@@ -72,7 +72,6 @@ export function openCustomMenu(
 
   document.body.appendChild(menu);
 
-  // Position relative to anchor within viewport
   const rect = anchorEl.getBoundingClientRect();
   const menuWidth = Math.min(270, window.innerWidth - 16);
   let left = rect.left;
@@ -90,7 +89,6 @@ export function openCustomMenu(
   menu.style.top = `${top}px`;
   menu.style.width = `${menuWidth}px`;
 
-  // Item click handlers
   menu.querySelectorAll<HTMLElement>('.gh-custom-menu-item').forEach((el) => {
     el.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -102,7 +100,6 @@ export function openCustomMenu(
     });
   });
 
-  // Close on outside click
   const handleOutsideClick = (e: MouseEvent) => {
     if (!menu.contains(e.target as Node) && !anchorEl.contains(e.target as Node)) {
       closeAllCustomMenus();
@@ -113,6 +110,18 @@ export function openCustomMenu(
   setTimeout(() => {
     document.addEventListener('click', handleOutsideClick, true);
   }, 10);
+}
+
+function renderOptionPrefix(opt?: DropdownOption, fallbackIcon = ''): string {
+  if (!opt) return fallbackIcon;
+  const parts: string[] = [];
+  if (opt.icon) {
+    parts.push(`<span class="gh-opt-icon">${opt.icon}</span>`);
+  }
+  if (opt.avatarUrl) {
+    parts.push(`<img src="${opt.avatarUrl}" class="gh-opt-avatar" style="width: 15px; height: 15px; border-radius: 50%; object-fit: cover; vertical-align: middle;" alt="">`);
+  }
+  return parts.length > 0 ? parts.join('') : fallbackIcon;
 }
 
 export class CustomSelectComponent {
@@ -145,13 +154,13 @@ export class CustomSelectComponent {
     wrapper.className = 'gh-custom-select';
     if (config.id) wrapper.id = config.id;
 
-    const currentOpt = this.options.find((o) => o.value === this.selectedValue) || this.options[0];
+    const currentOpt = this.options.find((o) => (o.value || '') === (this.selectedValue || '')) || this.options[0];
     const initialLabel = currentOpt ? currentOpt.label : config.placeholder || 'Select...';
-    const initialIcon = currentOpt?.icon || this.prefixIcon;
+    const initialPrefix = renderOptionPrefix(currentOpt, this.prefixIcon);
 
     wrapper.innerHTML = `
       <button type="button" class="gh-custom-select-trigger" aria-haspopup="listbox">
-        <span class="gh-custom-select-prefix">${initialIcon}</span>
+        <span class="gh-custom-select-prefix" style="display: inline-flex; align-items: center; gap: 4px;">${initialPrefix}</span>
         <span class="gh-custom-select-label">${initialLabel}</span>
         <span class="gh-custom-select-caret">${lucideIcons.chevronDown}</span>
       </button>
@@ -170,7 +179,6 @@ export class CustomSelectComponent {
       this.toggle();
     });
 
-    // Close when clicking outside
     document.addEventListener('click', (e) => {
       if (this.isOpen && !wrapper.contains(e.target as Node)) {
         this.close();
@@ -178,21 +186,28 @@ export class CustomSelectComponent {
     });
   }
 
+  setSelectedValue(value: string | null): void {
+    this.selectedValue = value || '';
+    this.updateTrigger();
+    this.renderDropdownItems();
+  }
+
   setOptions(options: DropdownOption[], selectedValue?: string): void {
     this.options = options;
     if (selectedValue !== undefined) {
-      this.selectedValue = selectedValue;
+      this.selectedValue = selectedValue || '';
     }
     this.updateTrigger();
     this.renderDropdownItems();
   }
 
   updateTrigger(): void {
-    const currentOpt = this.options.find((o) => o.value === this.selectedValue) || this.options[0];
+    const currentVal = this.selectedValue || '';
+    const currentOpt = this.options.find((o) => (o.value || '') === currentVal) || this.options[0];
     const labelEl = this.triggerBtn.querySelector<HTMLElement>('.gh-custom-select-label');
     const prefixEl = this.triggerBtn.querySelector<HTMLElement>('.gh-custom-select-prefix');
     if (labelEl) labelEl.textContent = currentOpt ? currentOpt.label : 'Select...';
-    if (prefixEl) prefixEl.innerHTML = currentOpt?.icon || this.prefixIcon;
+    if (prefixEl) prefixEl.innerHTML = renderOptionPrefix(currentOpt, this.prefixIcon);
   }
 
   renderDropdownItems(): void {
@@ -201,19 +216,15 @@ export class CustomSelectComponent {
       return;
     }
 
+    const currentVal = this.selectedValue || '';
     this.dropdownEl.innerHTML = this.options
       .map((opt) => {
-        const isSelected = opt.value === this.selectedValue;
+        const isSelected = (opt.value || '') === currentVal;
         return `
         <div class="gh-custom-select-option ${isSelected ? 'selected' : ''}" data-value="${opt.value}">
-          <div class="gh-opt-left">
-            ${
-              opt.avatarUrl
-                ? `<img src="${opt.avatarUrl}" class="gh-opt-avatar" alt="">`
-                : opt.icon
-                ? `<span class="gh-opt-icon">${opt.icon}</span>`
-                : ''
-            }
+          <div class="gh-opt-left" style="display: flex; align-items: center; gap: 6px;">
+            ${opt.icon ? `<span class="gh-opt-icon">${opt.icon}</span>` : ''}
+            ${opt.avatarUrl ? `<img src="${opt.avatarUrl}" class="gh-opt-avatar" style="width: 15px; height: 15px; border-radius: 50%; object-fit: cover; vertical-align: middle;" alt="">` : ''}
             <span class="gh-opt-label">${opt.label}</span>
           </div>
           ${isSelected ? `<span class="gh-opt-check">${lucideIcons.check}</span>` : ''}
@@ -229,6 +240,7 @@ export class CustomSelectComponent {
         if (val !== undefined) {
           this.selectedValue = val;
           this.updateTrigger();
+          this.renderDropdownItems();
           this.close();
           this.onChange(val);
         }
@@ -242,7 +254,8 @@ export class CustomSelectComponent {
   }
 
   open(): void {
-    // Close other dropdowns
+    this.renderDropdownItems();
+
     document.querySelectorAll<HTMLElement>('.gh-custom-select-dropdown').forEach((d) => {
       if (d !== this.dropdownEl) d.style.display = 'none';
     });

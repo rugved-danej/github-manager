@@ -1,10 +1,13 @@
 import { showDiffViewer } from '../ui/diffViewer';
+import { fluentAlert } from '../ui/dialog';
+import { showToast } from '../ui/toast';
+import { logger } from '../utils/logger';
 import type { RepoManager } from './manager';
 import type { GitHubRepo, GitHubTreeItem } from '../types/github';
 
 export async function handlePullLocal(manager: RepoManager, repo: GitHubRepo): Promise<void> {
   if (!manager.api) {
-    acode.alert('Error', 'API client not initialized. Please login first.');
+    fluentAlert('Error', 'API client not initialized. Please login first.');
     return;
   }
 
@@ -22,14 +25,14 @@ export async function handlePullLocal(manager: RepoManager, repo: GitHubRepo): P
       const expectedRepoString = `${repo.owner.login}/${repo.name}`.toLowerCase();
 
       if (!gitConfigContent.toLowerCase().includes(expectedRepoString)) {
-        acode.alert(
+        fluentAlert(
           'Pull Blocked',
           `Folder Mismatch! The .git/config does not belong to ${repo.owner.login}/${repo.name}.`
         );
         return;
       }
     } catch (e) {
-      acode.alert('Pull Blocked', 'This folder is not a valid repository. Missing .git/config file.');
+      fluentAlert('Pull Blocked', 'This folder is not a valid repository. Missing .git/config file.');
       return;
     }
 
@@ -101,13 +104,13 @@ export async function handlePullLocal(manager: RepoManager, repo: GitHubRepo): P
 
     if (conflictFiles.length > 0) {
       progressContainer.remove();
-      window.toast('Conflicts detected! Opening Diff Viewer...', 2000);
+      showToast('Conflicts detected! Opening Diff Viewer...', 'warning', 2000);
 
       for (const f of conflictFiles) {
         const localFileUrl = dest.url + (dest.url.endsWith('/') ? '' : '/') + f.path;
         const localContent = await fsOperation(localFileUrl).readFile('utf-8');
 
-        window.toast(`Fetching remote for ${f.path}...`, 1000);
+        showToast(`Fetching remote for ${f.path}...`, 'info', 1000);
         const remoteBlob = await manager.api.downloadBlob(repo.owner.login, repo.name, f.sha, false);
         const remoteContent =
           typeof remoteBlob === 'string' ? remoteBlob : new TextDecoder('utf-8').decode(remoteBlob);
@@ -117,9 +120,8 @@ export async function handlePullLocal(manager: RepoManager, repo: GitHubRepo): P
         if (choice === 'remote') {
           filesToDownload.push(f);
         } else if (choice === 'local') {
-          // Keep local version
         } else {
-          window.toast('Pull cancelled by user.', 2000);
+          showToast('Pull cancelled by user.', 'info', 2000);
           return;
         }
       }
@@ -128,7 +130,7 @@ export async function handlePullLocal(manager: RepoManager, repo: GitHubRepo): P
 
     if (filesToDownload.length === 0) {
       if (progressContainer.parentNode) progressContainer.remove();
-      acode.alert('Info', 'Local folder is already up-to-date.');
+      fluentAlert('Info', 'Local folder is already up-to-date.');
       return;
     }
 
@@ -183,12 +185,13 @@ export async function handlePullLocal(manager: RepoManager, repo: GitHubRepo): P
     setTimeout(() => {
       if (progressContainer.parentNode) progressContainer.remove();
     }, 3000);
-    window.toast(`Successfully pulled ${filesToDownload.length} files.`, 3000);
+    showToast(`Successfully pulled ${filesToDownload.length} files.`, 'success', 3000);
   } catch (err: any) {
+    logger.error('Pull failed:', err);
     if (targetCard) {
       const existingProgress = targetCard.querySelector('.gh-progress-wrapper');
       if (existingProgress) existingProgress.remove();
     }
-    acode.alert('Pull Failed', err.message || String(err));
+    fluentAlert('Pull Failed', err.message || String(err));
   }
 }

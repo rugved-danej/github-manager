@@ -9,8 +9,16 @@ import type {
   GitHubRateLimit,
   DeviceCodeResponse,
   TokenPollResponse,
-  CommitFileInput
+  CommitFileInput,
+  GitHubIssue,
+  GitHubIssueComment,
+  GitHubPullRequest,
+  GitHubPullFile,
+  GitHubRelease,
+  GitHubWorkflowRun,
+  GitHubSSHKey
 } from '../types/github';
+import { logger } from '../utils/logger';
 
 export class GitHubAPI {
   static readonly CLIENT_ID = 'Ov23liHi0m8xDFMtJY1J';
@@ -25,6 +33,7 @@ export class GitHubAPI {
   }
 
   static formatNetworkError(err: any): Error {
+    logger.error('GitHub API Error:', err);
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       return new Error('You are currently offline. Please check your internet connection.');
     }
@@ -105,10 +114,15 @@ export class GitHubAPI {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
+    const isUserContent = url.includes('githubusercontent.com');
+    const baseHeaders = isUserContent ? {} : this.getHeaders();
     const mergedHeaders: Record<string, string> = {
-      ...this.getHeaders(),
+      ...baseHeaders,
       ...((options.headers as Record<string, string>) || {})
     };
+    if (isUserContent) {
+      delete mergedHeaders['Authorization'];
+    }
 
     if (options.body && !mergedHeaders['Content-Type']) {
       mergedHeaders['Content-Type'] = 'application/json';
@@ -158,6 +172,9 @@ export class GitHubAPI {
         throw new Error(errMessage || `GitHub API error: HTTP ${res.status}`);
       }
 
+      if (res.status === 204) {
+        return true as unknown as T;
+      }
       if (responseType === 'arrayBuffer') {
         return (await res.arrayBuffer()) as unknown as T;
       }
@@ -191,6 +208,74 @@ export class GitHubAPI {
     return this.request<GitHubGist[]>(
       `${this.baseUrl}/gists?page=${page}&per_page=${perPage}&t=${Date.now()}`
     );
+  }
+
+  async getStarredGists(page = 1, perPage = 30): Promise<GitHubGist[]> {
+    return this.request<GitHubGist[]>(
+      `${this.baseUrl}/gists/starred?page=${page}&per_page=${perPage}&t=${Date.now()}`
+    );
+  }
+
+  async isGistStarred(gistId: string): Promise<boolean> {
+    try {
+      const res = await fetch(`${this.baseUrl}/gists/${gistId}/star`, {
+        headers: this.getHeaders()
+      });
+      return res.status === 204;
+    } catch {
+      return false;
+    }
+  }
+
+  async starGist(gistId: string): Promise<boolean> {
+    await this.request<any>(`${this.baseUrl}/gists/${gistId}/star`, {
+      method: 'PUT'
+    });
+    return true;
+  }
+
+  async unstarGist(gistId: string): Promise<boolean> {
+    await this.request<any>(`${this.baseUrl}/gists/${gistId}/star`, {
+      method: 'DELETE'
+    });
+    return true;
+  }
+
+  async isRepoStarred(owner: string, repo: string): Promise<boolean> {
+    try {
+      const res = await fetch(`${this.baseUrl}/user/starred/${owner}/${repo}`, {
+        headers: this.getHeaders()
+      });
+      return res.status === 204;
+    } catch {
+      return false;
+    }
+  }
+
+  async starRepo(owner: string, repo: string): Promise<boolean> {
+    await this.request<any>(`${this.baseUrl}/user/starred/${owner}/${repo}`, {
+      method: 'PUT'
+    });
+    return true;
+  }
+
+  async unstarRepo(owner: string, repo: string): Promise<boolean> {
+    await this.request<any>(`${this.baseUrl}/user/starred/${owner}/${repo}`, {
+      method: 'DELETE'
+    });
+    return true;
+  }
+
+  async getStarredRepos(page = 1, perPage = 100): Promise<GitHubRepo[]> {
+    return this.request<GitHubRepo[]>(
+      `${this.baseUrl}/user/starred?page=${page}&per_page=${perPage}&t=${Date.now()}`
+    );
+  }
+
+  async forkGist(gistId: string): Promise<GitHubGist> {
+    return this.request<GitHubGist>(`${this.baseUrl}/gists/${gistId}/forks`, {
+      method: 'POST'
+    });
   }
 
   async getGist(gistId: string): Promise<GitHubGist> {
@@ -237,9 +322,9 @@ export class GitHubAPI {
     return true;
   }
 
-  async getRepos(page = 1, perPage = 100): Promise<GitHubRepo[]> {
+  async getRepos(page = 1, perPage = 100, affiliation = 'owner'): Promise<GitHubRepo[]> {
     return this.request<GitHubRepo[]>(
-      `${this.baseUrl}/user/repos?sort=updated&page=${page}&per_page=${perPage}&t=${Date.now()}`
+      `${this.baseUrl}/user/repos?affiliation=${affiliation}&sort=updated&page=${page}&per_page=${perPage}&t=${Date.now()}`
     );
   }
 
@@ -313,15 +398,20 @@ export class GitHubAPI {
   }
 
   async downloadRawUrl(url: string): Promise<ArrayBuffer> {
-    return this.request<ArrayBuffer>(
-      url,
-      {
+    try {
+      const res = await fetch(url, {
         headers: {
           'Accept': '*/*'
         }
-      },
-      'arrayBuffer'
-    );
+      });
+      if (!res.ok) {
+        throw new Error(`Failed to download raw file (HTTP ${res.status})`);
+      }
+      return await res.arrayBuffer();
+    } catch (err: any) {
+      logger.error('downloadRawUrl error:', url, err);
+      throw GitHubAPI.formatNetworkError(err);
+    }
   }
 
   async downloadBlob(
@@ -362,7 +452,6 @@ export class GitHubAPI {
         return new TextEncoder().encode(rawData).buffer;
       }
 
-      // Check if ArrayBuffer contains JSON response from GitHub API
       const bytes = new Uint8Array(data);
       if (bytes.length > 0 && bytes[0] === 0x7B) {
         try {
@@ -446,6 +535,246 @@ export class GitHubAPI {
         method: 'PATCH',
         body: JSON.stringify({ sha: newCommitSha })
       }
+    );
+  }
+
+  async getIssues(
+    owner: string,
+    repo: string,
+    state: 'open' | 'closed' | 'all' = 'open',
+    page = 1
+  ): Promise<GitHubIssue[]> {
+    const data = await this.request<any[]>(
+      `${this.baseUrl}/repos/${owner}/${repo}/issues?state=${state}&per_page=30&page=${page}`
+    );
+    return data.filter((item) => !item.pull_request) as GitHubIssue[];
+  }
+
+  async getIssueComments(
+    owner: string,
+    repo: string,
+    issueNumber: number
+  ): Promise<GitHubIssueComment[]> {
+    return this.request<GitHubIssueComment[]>(
+      `${this.baseUrl}/repos/${owner}/${repo}/issues/${issueNumber}/comments`
+    );
+  }
+
+  async createIssue(
+    owner: string,
+    repo: string,
+    title: string,
+    body = '',
+    labels: string[] = []
+  ): Promise<GitHubIssue> {
+    return this.request<GitHubIssue>(
+      `${this.baseUrl}/repos/${owner}/${repo}/issues`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ title, body, labels })
+      }
+    );
+  }
+
+  async updateIssueState(
+    owner: string,
+    repo: string,
+    issueNumber: number,
+    state: 'open' | 'closed'
+  ): Promise<GitHubIssue> {
+    return this.request<GitHubIssue>(
+      `${this.baseUrl}/repos/${owner}/${repo}/issues/${issueNumber}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ state })
+      }
+    );
+  }
+
+  async createIssueComment(
+    owner: string,
+    repo: string,
+    issueNumber: number,
+    body: string
+  ): Promise<GitHubIssueComment> {
+    return this.request<GitHubIssueComment>(
+      `${this.baseUrl}/repos/${owner}/${repo}/issues/${issueNumber}/comments`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ body })
+      }
+    );
+  }
+
+  async getPullRequests(
+    owner: string,
+    repo: string,
+    state: 'open' | 'closed' | 'all' = 'open',
+    page = 1
+  ): Promise<GitHubPullRequest[]> {
+    return this.request<GitHubPullRequest[]>(
+      `${this.baseUrl}/repos/${owner}/${repo}/pulls?state=${state}&per_page=30&page=${page}`
+    );
+  }
+
+  async getPullRequest(
+    owner: string,
+    repo: string,
+    pullNumber: number
+  ): Promise<GitHubPullRequest> {
+    return this.request<GitHubPullRequest>(
+      `${this.baseUrl}/repos/${owner}/${repo}/pulls/${pullNumber}`
+    );
+  }
+
+  async getPullRequestFiles(
+    owner: string,
+    repo: string,
+    pullNumber: number
+  ): Promise<GitHubPullFile[]> {
+    return this.request<GitHubPullFile[]>(
+      `${this.baseUrl}/repos/${owner}/${repo}/pulls/${pullNumber}/files`
+    );
+  }
+
+  async createPullRequest(
+    owner: string,
+    repo: string,
+    title: string,
+    head: string,
+    base: string,
+    body = ''
+  ): Promise<GitHubPullRequest> {
+    return this.request<GitHubPullRequest>(
+      `${this.baseUrl}/repos/${owner}/${repo}/pulls`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ title, head, base, body })
+      }
+    );
+  }
+
+  async mergePullRequest(
+    owner: string,
+    repo: string,
+    pullNumber: number,
+    method: 'merge' | 'squash' | 'rebase' = 'merge',
+    commitTitle?: string
+  ): Promise<any> {
+    return this.request<any>(
+      `${this.baseUrl}/repos/${owner}/${repo}/pulls/${pullNumber}/merge`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({ merge_method: method, commit_title: commitTitle })
+      }
+    );
+  }
+
+  async closePullRequest(
+    owner: string,
+    repo: string,
+    pullNumber: number
+  ): Promise<GitHubPullRequest> {
+    return this.request<GitHubPullRequest>(
+      `${this.baseUrl}/repos/${owner}/${repo}/pulls/${pullNumber}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ state: 'closed' })
+      }
+    );
+  }
+
+  async getReleases(owner: string, repo: string, page = 1): Promise<GitHubRelease[]> {
+    return this.request<GitHubRelease[]>(
+      `${this.baseUrl}/repos/${owner}/${repo}/releases?per_page=30&page=${page}`
+    );
+  }
+
+  async createRelease(
+    owner: string,
+    repo: string,
+    tag: string,
+    name?: string,
+    body = '',
+    draft = false,
+    prerelease = false
+  ): Promise<GitHubRelease> {
+    return this.request<GitHubRelease>(
+      `${this.baseUrl}/repos/${owner}/${repo}/releases`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          tag_name: tag,
+          name: name || tag,
+          body,
+          draft,
+          prerelease
+        })
+      }
+    );
+  }
+
+  async getWorkflowRuns(
+    owner: string,
+    repo: string,
+    page = 1
+  ): Promise<{ total_count: number; workflow_runs: GitHubWorkflowRun[] }> {
+    return this.request<{ total_count: number; workflow_runs: GitHubWorkflowRun[] }>(
+      `${this.baseUrl}/repos/${owner}/${repo}/actions/runs?per_page=25&page=${page}`
+    );
+  }
+
+  async rerunWorkflow(owner: string, repo: string, runId: number): Promise<void> {
+    await this.request<void>(
+      `${this.baseUrl}/repos/${owner}/${repo}/actions/runs/${runId}/rerun`,
+      { method: 'POST' }
+    );
+  }
+
+  async forkRepo(owner: string, repo: string, organization?: string): Promise<GitHubRepo> {
+    const body: Record<string, any> = {};
+    if (organization) body.organization = organization;
+    return this.request<GitHubRepo>(
+      `${this.baseUrl}/repos/${owner}/${repo}/forks`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body)
+      }
+    );
+  }
+
+  async updateRepo(
+    owner: string,
+    repo: string,
+    data: { description?: string; homepage?: string; private?: boolean; default_branch?: string }
+  ): Promise<GitHubRepo> {
+    return this.request<GitHubRepo>(
+      `${this.baseUrl}/repos/${owner}/${repo}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(data)
+      }
+    );
+  }
+
+  async getSSHKeys(): Promise<GitHubSSHKey[]> {
+    return this.request<GitHubSSHKey[]>(`${this.baseUrl}/user/keys`);
+  }
+
+  async createSSHKey(title: string, key: string): Promise<GitHubSSHKey> {
+    return this.request<GitHubSSHKey>(
+      `${this.baseUrl}/user/keys`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ title, key })
+      }
+    );
+  }
+
+  async deleteSSHKey(keyId: number): Promise<void> {
+    await this.request<void>(
+      `${this.baseUrl}/user/keys/${keyId}`,
+      { method: 'DELETE' }
     );
   }
 }

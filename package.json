@@ -1,11 +1,12 @@
 {
   "name": "dev.rugved.githubmanager",
-  "version": "1.2.4",
+  "version": "2.0.0",
   "description": "Full-featured GitHub & Gist manager for Acode",
   "main": "dist/main.js",
   "repository": "https://github.com/rugved-danej/github-manager.git",
   "author": "Rugved <rugveddanej007@gmail.com>",
   "license": "MIT",
+  "type": "module",
   "scripts": {
     "dev": "acodez dev",
     "build": "acodez build",
@@ -20,5 +21,8 @@
     "acode-plugin-types": "^1.12.9",
     "typescript": "^5.9.3"
   },
-  "browserslist": "cover 100%,not android < 5"
+  "browserslist": "cover 100%,not android < 5",
+  "acodez": {
+    "obfuscate": true
+  }
 }

@@ -2,7 +2,6 @@ import { lucideIcons } from './icons';
 
 export interface ImageViewerOptions {
   uri?: string;
-  downloadUrl?: string | null;
   onClose?: () => void;
 }
 
@@ -68,10 +67,6 @@ export async function imageToDataUrl(
   }
 }
 
-/**
- * Creates an interactive image container reproducing Acode's native pan/zoom engine
- * (wheel zoom, constrained translation, touch drag, and 2-finger pinch-to-zoom).
- */
 export function createAcodeImageContainer(imageSrc: string): HTMLElement {
   const container = document.createElement('div');
   container.className = 'image-container';
@@ -128,7 +123,6 @@ export function createAcodeImageContainer(imageSrc: string): HTMLElement {
     translateY = Math.min(Math.max(translateY, bounds.minY), bounds.maxY);
   }
 
-  // Mouse wheel zoom
   container.addEventListener(
     'wheel',
     (e: WheelEvent) => {
@@ -232,13 +226,9 @@ export function createAcodeImageContainer(imageSrc: string): HTMLElement {
   return container;
 }
 
-/**
- * Opens image directly as a native Acode editor tab, reproducing Acode's built-in image viewer.
- */
 export function openInAcodeImageTab(filename: string, imageSrc: string, uri?: string): boolean {
   const fileUri = uri || `github://${filename}`;
 
-  // Check if file is already open in editorManager
   const em = (window as any).editorManager;
   if (em?.getFile) {
     const existing = em.getFile(fileUri, 'uri') || em.getFile(filename, 'name');
@@ -270,7 +260,6 @@ export function openImageViewer(
   imageSrc: string,
   options: ImageViewerOptions = {}
 ): void {
-  // Remove existing modal if any
   document.getElementById('gh-image-modal')?.remove();
 
   const modal = document.createElement('div');
@@ -286,11 +275,6 @@ export function openImageViewer(
         </div>
         <div class="gh-modal-actions">
           <button id="gh-modal-header-tab-btn" class="gh-btn-icon" title="Open in Acode Editor Tab">${lucideIcons.externalLink}</button>
-          ${
-            options.downloadUrl
-              ? `<button id="gh-modal-browser-btn" class="gh-btn-icon" title="Open Original in Browser">${lucideIcons.globe}</button>`
-              : ''
-          }
           <button id="gh-modal-close-btn" class="gh-btn-icon" title="Close">${lucideIcons.x}</button>
         </div>
       </div>
@@ -304,11 +288,6 @@ export function openImageViewer(
         <button id="gh-modal-footer-tab-btn" class="gh-btn gh-btn-sm gh-btn-primary">
           ${lucideIcons.externalLink} Open in Editor Tab
         </button>
-        ${
-          options.downloadUrl
-            ? `<button id="gh-modal-footer-browser-btn" class="gh-btn gh-btn-sm gh-btn-secondary">${lucideIcons.globe} Open in Browser</button>`
-            : ''
-        }
       </div>
     </div>
   `;
@@ -327,18 +306,9 @@ export function openImageViewer(
     if (loading) {
       loading.innerHTML = `
         <div style="text-align: center; padding: 14px 10px;">
-          <p class="gh-text-muted" style="color: #f85149; font-size: 11.5px; margin: 0 0 8px 0;">Failed to render image preview.</p>
-          ${
-            options.downloadUrl
-              ? `<button id="gh-modal-retry-external" class="gh-btn gh-btn-sm gh-btn-secondary" style="font-size: 11px; margin-top: 4px;">Open in Browser ↗</button>`
-              : ''
-          }
+          <p class="gh-text-muted" style="color: #f85149; font-size: 11.5px; margin: 0;">Failed to render image preview.</p>
         </div>
       `;
-      const extBtn = loading.querySelector('#gh-modal-retry-external');
-      if (extBtn && options.downloadUrl) {
-        extBtn.addEventListener('click', openExternal);
-      }
     }
   };
 
@@ -383,19 +353,4 @@ export function openImageViewer(
 
   modal.querySelector('#gh-modal-header-tab-btn')?.addEventListener('click', openInTab);
   modal.querySelector('#gh-modal-footer-tab-btn')?.addEventListener('click', openInTab);
-
-  const openExternal = () => {
-    if (!options.downloadUrl) return;
-    const url = options.downloadUrl;
-    if ((window as any).system?.openInBrowser) {
-      (window as any).system.openInBrowser(url);
-    } else if ((window as any).cordova) {
-      window.open(url, '_system');
-    } else {
-      window.open(url, '_blank');
-    }
-  };
-
-  modal.querySelector('#gh-modal-browser-btn')?.addEventListener('click', openExternal);
-  modal.querySelector('#gh-modal-footer-browser-btn')?.addEventListener('click', openExternal);
 }

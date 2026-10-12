@@ -1,11 +1,14 @@
 import { showDiffViewer } from '../ui/diffViewer';
+import { fluentConfirm, fluentPrompt, fluentAlert } from '../ui/dialog';
+import { showToast } from '../ui/toast';
+import { logger } from '../utils/logger';
 import type { RepoManager } from './manager';
 import type { GitHubRepo } from '../types/github';
 import type { LocalFileEntry } from '../types/plugin';
 
 export async function handlePushLocal(manager: RepoManager, repo: GitHubRepo): Promise<void> {
   if (!manager.api) {
-    acode.alert('Error', 'API client not initialized. Please login first.');
+    fluentAlert('Error', 'API client not initialized. Please login first.');
     return;
   }
 
@@ -22,21 +25,25 @@ export async function handlePushLocal(manager: RepoManager, repo: GitHubRepo): P
       const expectedRepoString = `${repo.owner.login}/${repo.name}`.toLowerCase();
 
       if (!gitConfigContent.toLowerCase().includes(expectedRepoString)) {
-        acode.alert(
+        fluentAlert(
           'Push Blocked',
           `Folder Mismatch! The .git/config does not belong to ${repo.owner.login}/${repo.name}.`
         );
         return;
       }
     } catch (e) {
-      acode.alert('Push Blocked', 'This folder is not a valid repository. Missing .git/config file.');
+      fluentAlert('Push Blocked', 'This folder is not a valid repository. Missing .git/config file.');
       return;
     }
 
-    const message = await acode.prompt('Commit Message', `Update ${repo.name} from Acode`);
+    const message = await fluentPrompt({
+      title: 'Commit Message',
+      defaultValue: `Update ${repo.name} from Acode`,
+      placeholder: 'Enter commit message...'
+    });
     if (!message) return;
 
-    window.toast('Preparing Delta Sync...', 2000);
+    showToast('Preparing Delta Sync...', 'info', 2000);
 
     const branch = repo.default_branch || 'main';
     const remoteFiles: Record<string, string> = {};
@@ -48,49 +55,52 @@ export async function handlePushLocal(manager: RepoManager, repo: GitHubRepo): P
           if (f.type === 'blob') remoteFiles[f.path] = f.sha;
         });
       }
-    } catch (e) {}
+    } catch (e) {
+      logger.warn('Could not fetch existing tree, proceeding with full push', e);
+    }
 
-    const ignoreRules = await manager.getIgnoreRules(dest.url);
-
-    const calculateGitSha = async (content: string): Promise<string | null> => {
-      if (!window.crypto || !window.crypto.subtle) return null;
-      const encoder = new TextEncoder();
-      const data = encoder.encode(content);
-      const header = encoder.encode(`blob ${data.length}\0`);
-      const combined = new Uint8Array(header.length + data.length);
-      combined.set(header);
-      combined.set(data, header.length);
-      const hashBuffer = await crypto.subtle.digest('SHA-1', combined);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-    };
-
-    const readDirRecursive = async (url: string, basePath = ''): Promise<LocalFileEntry[]> => {
+    const readDirRecursive = async (folderUrl: string, currentPath = ''): Promise<LocalFileEntry[]> => {
+      const list = await fsOperation(folderUrl).lsDir();
       let files: LocalFileEntry[] = [];
-      const dir = await fsOperation(url).lsDir();
 
-      for (const item of dir) {
-        if (item.name === '.git' || item.name === '.gh-manager-sync.json') continue;
+      for (const item of list) {
+        if (item.name === '.git' || item.name === 'node_modules') continue;
 
-        const itemPath = basePath ? `${basePath}/${item.name}` : item.name;
-
-        if (ignoreRules.some((rx) => rx.test(itemPath))) continue;
+        const relativePath = currentPath ? `${currentPath}/${item.name}` : item.name;
 
         if (item.isDirectory) {
-          const subFiles = await readDirRecursive(item.url, itemPath);
+          const subFiles = await readDirRecursive(item.url, relativePath);
           files = files.concat(subFiles);
         } else {
-          if (item.name.match(/\.(png|jpe?g|gif|ico|zip|pdf|exe|bin|apk|mp3|mp4|ttf|woff|woff2|eot)$/i)) {
-            continue;
-          }
           try {
             const content = await fsOperation(item.url).readFile('utf-8');
-            const localSha = await calculateGitSha(content);
+            const cleanContent = content.replace(/\r\n/g, '\n');
 
-            if (!localSha || remoteFiles[itemPath] !== localSha) {
-              files.push({ path: itemPath, content });
+            const remoteSha = remoteFiles[relativePath];
+            if (remoteSha) {
+              const encoder = new TextEncoder();
+              const data = encoder.encode(cleanContent);
+              const header = `blob ${data.length}\0`;
+              const fullBuffer = new Uint8Array(header.length + data.length);
+              fullBuffer.set(encoder.encode(header), 0);
+              fullBuffer.set(data, header.length);
+
+              const hashBuffer = await crypto.subtle.digest('SHA-1', fullBuffer);
+              const hashArray = Array.from(new Uint8Array(hashBuffer));
+              const localSha = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+
+              if (localSha === remoteSha) {
+                continue;
+              }
             }
-          } catch (e) {}
+
+            files.push({
+              path: relativePath,
+              content: cleanContent
+            });
+          } catch (readErr) {
+            logger.warn(`Skipping unreadable or binary file: ${relativePath}`, readErr);
+          }
         }
       }
       return files;
@@ -99,14 +109,16 @@ export async function handlePushLocal(manager: RepoManager, repo: GitHubRepo): P
     let allFiles = await readDirRecursive(dest.url);
 
     if (allFiles.length === 0) {
-      acode.alert('Info', 'Everything is up-to-date. No changed files found to push.');
+      fluentAlert('Info', 'Everything is up-to-date. No changed files found to push.');
       return;
     }
 
-    const review = await acode.confirm(
-      'Review Changes',
-      `Found ${allFiles.length} file(s) changed locally. Do you want to review the diffs before pushing?`
-    );
+    const review = await fluentConfirm({
+      title: 'Review Changes',
+      message: `Found ${allFiles.length} file(s) changed locally. Do you want to review diffs before pushing?`,
+      confirmText: 'Review Diffs',
+      cancelText: 'Skip Review'
+    });
 
     if (review) {
       const filesToPush: LocalFileEntry[] = [];
@@ -114,7 +126,7 @@ export async function handlePushLocal(manager: RepoManager, repo: GitHubRepo): P
         const remoteSha = remoteFiles[f.path];
         let remoteContent = '';
         if (remoteSha) {
-          window.toast(`Fetching remote for ${f.path}...`, 1000);
+          showToast(`Fetching remote for ${f.path}...`, 'info', 1000);
           const blob = await manager.api.downloadBlob(repo.owner.login, repo.name, remoteSha, false);
           remoteContent = typeof blob === 'string' ? blob : new TextDecoder('utf-8').decode(blob);
         }
@@ -124,25 +136,32 @@ export async function handlePushLocal(manager: RepoManager, repo: GitHubRepo): P
         if (choice === 'local') {
           filesToPush.push(f);
         } else if (choice === 'remote') {
-          // Reject local changes
         } else {
-          window.toast('Push cancelled.', 2000);
+          showToast('Push cancelled.', 'info', 2000);
           return;
         }
       }
 
       allFiles = filesToPush;
       if (allFiles.length === 0) {
-        window.toast('No files approved for pushing.', 2000);
+        showToast('No files approved for pushing.', 'info', 2000);
         return;
       }
     }
 
-    window.toast(`Committing ${allFiles.length} changed files...`, 2000);
+    const confirmFinal = await fluentConfirm({
+      title: 'Push to GitHub',
+      message: `Push ${allFiles.length} file(s) to branch "${branch}" on repository ${repo.owner.login}/${repo.name}?`,
+      confirmText: 'Push Now'
+    });
+    if (!confirmFinal) return;
+
+    showToast(`Committing ${allFiles.length} changed files...`, 'info', 2000);
 
     await manager.api.commitMultipleFiles(repo.owner.login, repo.name, branch, message, allFiles);
-    window.toast('Pushed successfully!', 3000);
+    showToast('Pushed successfully to GitHub!', 'success');
   } catch (err: any) {
-    acode.alert('Push Failed', err.message || String(err));
+    logger.error('Push failed:', err);
+    fluentAlert('Push Failed', err.message || String(err));
   }
 }

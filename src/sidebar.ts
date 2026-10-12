@@ -2,9 +2,13 @@ import { GitHubAPI } from './api/github';
 import { GistManager } from './gists/manager';
 import { RepoManager } from './repos/manager';
 import { lucideIcons } from './ui/icons';
-import { openCustomMenu, type MenuItem } from './ui/selectMenu';
+import { openCustomMenu, CustomSelectComponent, type MenuItem, type DropdownOption } from './ui/selectMenu';
+import { fluentConfirm, fluentPrompt, fluentAlert } from './ui/dialog';
+import { showToast } from './ui/toast';
+import { logger } from './utils/logger';
 import { AuthVault } from './storage/authVault';
 import type { GitHubUser, GitHubAccount, GitHubOrg } from './types/github';
+import { openAccountSettingsModal } from './features/accountSettingsModal';
 
 export class GithubSidebar {
   readonly appId = 'github_manager_sidebar';
@@ -17,6 +21,9 @@ export class GithubSidebar {
   api: GitHubAPI | null = null;
   token: string | null = null;
   currentUser: GitHubUser | null = null;
+  orgs: GitHubOrg[] = [];
+  selectedOrg: string | null = null;
+  contextSelect: CustomSelectComponent | null = null;
   activeTab: 'repos' | 'gists' = 'repos';
 
   gistManager: GistManager;
@@ -46,8 +53,6 @@ export class GithubSidebar {
       this.autoRefresh();
     };
   }
-
-  // --- Multi-Account Storage Helpers ---
 
   getAccounts(): GitHubAccount[] {
     return AuthVault.getLocalAccounts();
@@ -81,12 +86,9 @@ export class GithubSidebar {
     return accounts[0];
   }
 
-  // --- Initialization & Lifecycle ---
-
   async init(): Promise<void> {
     const sideBarApps = acode.require('sidebarApps');
 
-    // 1. Recover vault across all layers (localStorage, DATA_STORAGE file, Keychain, Settings)
     const { token } = await AuthVault.recover();
 
     if (token) {
@@ -136,7 +138,9 @@ export class GithubSidebar {
     try {
       orgs = await this.api.getUserOrgs();
     } catch (e) {}
+    this.orgs = orgs;
     this.repoManager.setOrgs(orgs);
+    this.updateContextSelect();
 
     if (persist) {
       const accounts = this.getAccounts();
@@ -182,8 +186,6 @@ export class GithubSidebar {
     } catch (e) {}
   }
 
-  // --- Account Switching & Management UI ---
-
   showAccountSwitcher(anchorEl: HTMLElement): void {
     const accounts = this.getAccounts();
     const items: MenuItem[] = accounts.map((acc) => ({
@@ -227,7 +229,11 @@ export class GithubSidebar {
         sublabel: 'Token with repo & gist scopes',
         icon: lucideIcons.lock,
         action: async () => {
-          const token = await acode.prompt('GitHub Personal Access Token', '', 'password');
+          const token = await fluentPrompt({
+            title: 'GitHub Personal Access Token',
+            placeholder: 'ghp_...',
+            inputType: 'password'
+          });
           if (token) await this.login(token.trim());
         }
       },
@@ -250,7 +256,12 @@ export class GithubSidebar {
       avatarUrl: acc.avatar_url,
       danger: true,
       action: async () => {
-        const confirmed = await acode.confirm('Confirm Removal', `Remove account @${acc.login}?`);
+        const confirmed = await fluentConfirm({
+          title: 'Confirm Removal',
+          message: `Remove account @${acc.login} from saved accounts?`,
+          confirmText: 'Remove',
+          danger: true
+        });
         if (confirmed) await this.removeAccount(acc.id);
       }
     }));
@@ -263,13 +274,14 @@ export class GithubSidebar {
     const target = accounts.find((a) => a.id === id || a.login === id);
     if (!target) return;
 
-    window.toast(`Switching to @${target.login}...`, 1500);
+    showToast(`Switching to @${target.login}...`, 'info', 1500);
     try {
       await this.applyToken(target.token, true);
-      window.toast(`Active: @${target.login}`, 2500);
+      showToast(`Active: @${target.login}`, 'success', 2500);
       await this.render();
     } catch (err: any) {
-      acode.alert('Error', `Failed to switch to @${target.login}: ${err.message || String(err)}`);
+      logger.error('Failed to switch account:', err);
+      fluentAlert('Error', `Failed to switch to @${target.login}: ${err.message || String(err)}`);
     }
   }
 
@@ -286,14 +298,12 @@ export class GithubSidebar {
         await this.logout(true);
       }
     } else {
-      window.toast(`Account @${id} removed`, 2000);
+      showToast(`Account @${id} removed`, 'info', 2000);
     }
   }
 
-  // --- Device Flow in Dialog / Modal ---
-
   async startDeviceFlowDialog(): Promise<void> {
-    window.toast('Requesting device code from GitHub...', 2000);
+    showToast('Requesting device code from GitHub...', 'info', 2000);
     try {
       const data = await GitHubAPI.requestDeviceCode();
 
@@ -301,51 +311,94 @@ export class GithubSidebar {
         navigator.clipboard.writeText(data.user_code);
       }
 
-      if ((window as any).system?.openInBrowser) {
-        (window as any).system.openInBrowser(data.verification_uri);
-      } else if ((window as any).cordova) {
-        window.open(data.verification_uri, '_system');
-      } else {
-        window.open(data.verification_uri, '_blank');
-      }
+      const openBrowser = () => {
+        if (navigator.clipboard?.writeText) {
+          navigator.clipboard.writeText(data.user_code);
+        }
+        if ((window as any).system?.openInBrowser) {
+          (window as any).system.openInBrowser(data.verification_uri);
+        } else if ((window as any).cordova) {
+          window.open(data.verification_uri, '_system');
+        } else {
+          window.open(data.verification_uri, '_blank');
+        }
+        showToast('Code copied! Authorize in browser.', 'info', 2500);
+      };
 
-      acode.alert(
-        'GitHub Authorization',
-        `Your one-time code is:\n\n👉 ${data.user_code} 👈\n\n(Code copied to clipboard!)\nAuthorize in browser, then wait for approval.`
-      );
+      const modal = document.createElement('div');
+      modal.className = 'gh-modal-backdrop';
+      modal.innerHTML = `
+        <div class="gh-modal-container" style="max-width: 360px; width: 92vw; text-align: center;">
+          <div class="gh-modal-header" style="justify-content: space-between;">
+            <div class="gh-modal-title">
+              <span class="gh-modal-icon">${lucideIcons.github}</span>
+              <span class="gh-modal-text">GitHub Authorization</span>
+            </div>
+            <button id="gh-auth-modal-close" class="gh-btn-icon" title="Close">${lucideIcons.x}</button>
+          </div>
+          <div class="gh-modal-body" style="flex-direction: column; align-items: center; gap: 10px; padding: 16px;">
+            <p style="margin: 0; font-size: 11.5px; color: var(--gh-text-muted);">Enter this code on GitHub to authorize:</p>
+            <div class="gh-device-code" style="font-size: 20px; font-weight: 700; letter-spacing: 2px; padding: 8px 18px; background: var(--gh-surface-alt); border: 1px dashed var(--gh-border); border-radius: var(--gh-radius-sm); color: var(--gh-accent); font-family: monospace;">${data.user_code}</div>
+            <p style="margin: 0; font-size: 10.5px; color: var(--gh-text-muted);">(Code copied to clipboard)</p>
+            <button id="gh-auth-open-browser-btn" class="gh-btn gh-btn-block gh-btn-success" style="padding: 10px 16px; font-weight: 600; font-size: 13px; margin-top: 6px;">
+              ${lucideIcons.externalLink}
+              <span>Open Browser</span>
+            </button>
+            <p class="gh-text-muted" style="margin: 8px 0 0 0; font-size: 11px; display: flex; align-items: center; justify-content: center; gap: 6px;">
+              <span class="gh-badge gh-badge-offline" style="width: 6px; height: 6px; padding: 0; border-radius: 50%;"></span>
+              Waiting for authorization...
+            </p>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(modal);
+
+      let polling = true;
+      const closeModal = () => {
+        polling = false;
+        modal.classList.add('gh-modal-closing');
+        setTimeout(() => modal.remove(), 180);
+      };
+
+      modal.querySelector('#gh-auth-modal-close')?.addEventListener('click', closeModal);
+      modal.querySelector('#gh-auth-open-browser-btn')?.addEventListener('click', () => {
+        openBrowser();
+      });
 
       let interval = data.interval;
-      let polling = true;
 
       for (let attempts = 0; attempts < 60 && polling; attempts++) {
         await new Promise((resolve) => setTimeout(resolve, interval * 1000));
+        if (!polling) break;
         const pollData = await GitHubAPI.pollForToken(data.device_code);
 
         if (pollData.access_token) {
           polling = false;
-          window.toast('GitHub connected successfully!', 3000);
+          closeModal();
+          showToast('GitHub connected successfully!', 'success', 3000);
           await this.login(pollData.access_token);
           return;
         } else if (pollData.error === 'authorization_pending') {
-          // Waiting
         } else if (pollData.error === 'slow_down') {
           interval += 5;
         } else if (pollData.error === 'expired_token') {
           polling = false;
-          acode.alert('Error', 'The device code expired. Please try again.');
+          closeModal();
+          fluentAlert('Error', 'The device code expired. Please try again.');
           return;
         } else {
           polling = false;
-          acode.alert('Error', pollData.error_description || 'Authorization failed.');
+          closeModal();
+          fluentAlert('Error', pollData.error_description || 'Authorization failed.');
           return;
         }
       }
     } catch (err: any) {
-      acode.alert('Device Flow Error', String(err.message || err));
+      logger.error('Device flow error:', err);
+      fluentAlert('Device Flow Error', String(err.message || err));
     }
   }
-
-  // --- Rendering UI ---
 
   async render(): Promise<void> {
     if (!this.container) return;
@@ -392,9 +445,15 @@ export class GithubSidebar {
               <span id="gh-offline-indicator" class="gh-badge gh-badge-offline" style="display: ${isOffline ? 'inline-flex' : 'none'};">Offline</span>
             </div>
             <div class="gh-header-actions">
+              <button id="gh-account-settings-btn" class="gh-btn-icon" title="Account & SSH Keys">${lucideIcons.key}</button>
               <button id="gh-add-account-btn" class="gh-btn-icon" title="Add Another Account">${lucideIcons.userPlus}</button>
               <button id="gh-logout-btn" class="gh-btn-icon gh-btn-icon-danger" title="Logout">${lucideIcons.logout}</button>
             </div>
+          </div>
+
+          <!-- Fluent Global Context Selector (Personal vs Organizations) -->
+          <div class="gh-context-bar" style="margin-bottom: 8px;">
+            <div id="gh-global-context-wrap" class="gh-custom-select-wrap"></div>
           </div>
 
           <!-- Fluent Segmented Tabs -->
@@ -418,10 +477,14 @@ export class GithubSidebar {
       `;
       this.container.appendChild(scrollContainer);
 
-      // Account switcher & Header button handlers
       const profileTrigger = scrollContainer.querySelector<HTMLElement>('#gh-profile-info-trigger');
       profileTrigger?.addEventListener('click', () => {
         this.showAccountSwitcher(profileTrigger);
+      });
+
+      const accountSettingsBtn = scrollContainer.querySelector<HTMLElement>('#gh-account-settings-btn');
+      accountSettingsBtn?.addEventListener('click', () => {
+        if (this.api) openAccountSettingsModal(this.api, this.currentUser);
       });
 
       const addAccountBtn = scrollContainer.querySelector<HTMLElement>('#gh-add-account-btn');
@@ -433,7 +496,6 @@ export class GithubSidebar {
         this.logout();
       });
 
-      // Segmented Tab switcher handlers
       const reposTab = scrollContainer.querySelector<HTMLElement>('#tab-repos');
       const gistsTab = scrollContainer.querySelector<HTMLElement>('#tab-gists');
       const reposContainer = scrollContainer.querySelector<HTMLElement>('#repos-container')!;
@@ -458,11 +520,15 @@ export class GithubSidebar {
       reposTab?.addEventListener('click', () => switchTab('repos'));
       gistsTab?.addEventListener('click', () => switchTab('gists'));
 
-      // Render sub-managers
       this.repoManager.render(reposContainer);
       this.gistManager.render(gistsContainer);
+
+      this.contextSelect = null;
+      this.updateContextSelect();
+      this.gistManager.onSwitchToPersonal = () => {
+        this.switchContext(null);
+      };
     } else {
-      // Fluent Login Screen
       scrollContainer.innerHTML = `
         <div class="gh-container" style="display: flex; flex-direction: column; justify-content: center; min-height: 85%;">
           <div class="gh-auth-card">
@@ -487,8 +553,9 @@ export class GithubSidebar {
                   Login with Token
                 </button>
                 <div style="text-align: center;">
-                  <span id="gh-generate-token-btn" class="gh-text-link" style="font-size: 11px; cursor: pointer;">
-                    Create token with repo & gist permissions ↗
+                  <span id="gh-generate-token-btn" class="gh-text-link" style="font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 4px;">
+                    <span>Create token with repo & gist permissions</span>
+                    ${lucideIcons.externalLink}
                   </span>
                 </div>
               </div>
@@ -543,8 +610,9 @@ export class GithubSidebar {
         <div class="gh-device-box">
           <p style="font-size: 12px; margin: 0 0 6px 0; color: var(--gh-text-muted);">Enter this code on GitHub:</p>
           <div class="gh-device-code">${data.user_code}</div>
-          <button id="gh-open-browser-btn" class="gh-btn gh-btn-block gh-btn-success" style="padding: 9px 14px; font-weight: 600;">
-            Copy & Open Browser
+          <button id="gh-open-browser-btn" class="gh-btn gh-btn-block gh-btn-success" style="padding: 9px 14px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 6px;">
+            ${lucideIcons.externalLink}
+            <span>Open Browser</span>
           </button>
           <p class="gh-text-muted" style="margin: 10px 0 0 0; font-size: 11px; display: flex; align-items: center; justify-content: center; gap: 6px;">
             <span class="gh-badge gh-badge-offline" style="width: 6px; height: 6px; padding: 0; border-radius: 50%;"></span>
@@ -565,7 +633,7 @@ export class GithubSidebar {
           } else {
             window.open(data.verification_uri, '_system');
           }
-          window.toast('Code copied! Authorize in browser.', 2500);
+          showToast('Code copied! Authorize in browser.', 'info', 2500);
         });
       }
 
@@ -585,50 +653,53 @@ export class GithubSidebar {
 
         if (pollData.access_token) {
           polling = false;
-          window.toast('GitHub connected successfully!', 3000);
+          showToast('GitHub connected successfully!', 'success', 3000);
           await this.login(pollData.access_token);
         } else if (pollData.error === 'authorization_pending') {
-          // Waiting
         } else if (pollData.error === 'slow_down') {
           interval += 5;
         } else if (pollData.error === 'expired_token') {
           polling = false;
-          acode.alert('Error', 'The device code expired. Please try again.');
+          fluentAlert('Error', 'The device code expired. Please try again.');
           await this.render();
         } else {
           polling = false;
-          acode.alert('Error', pollData.error_description || 'Authorization failed.');
+          fluentAlert('Error', pollData.error_description || 'Authorization failed.');
           await this.render();
         }
       }
     } catch (err: any) {
-      acode.alert('Device Flow Error', String(err.message || err));
+      logger.error('Device flow error:', err);
+      fluentAlert('Device Flow Error', String(err.message || err));
       await this.render();
     }
   }
 
   async login(token: string): Promise<void> {
     if (!token) {
-      acode.alert('Error', 'Please enter a valid token.');
+      fluentAlert('Error', 'Please enter a valid token.');
       return;
     }
     try {
-      window.toast('Authenticating...', 2000);
+      showToast('Authenticating...', 'info', 2000);
       const user = await this.applyToken(token, true);
-      window.toast(`Welcome @${user.login}!`, 3000);
+      showToast(`Welcome @${user.login}!`, 'success', 3000);
       await this.render();
     } catch (error) {
-      acode.alert('Login Failed', 'Invalid token or network error. Please try again.');
+      logger.error('Login failed:', error);
+      fluentAlert('Login Failed', 'Invalid token or network error. Please try again.');
     }
   }
 
   async logout(forceAll = false): Promise<void> {
     const accounts = this.getAccounts();
     if (!forceAll && accounts.length > 1) {
-      const confirm = await acode.confirm(
-        'Logout',
-        `Logout from @${this.currentUser?.login || 'current account'}?`
-      );
+      const confirm = await fluentConfirm({
+        title: 'Logout',
+        message: `Logout from @${this.currentUser?.login || 'current account'}?`,
+        confirmText: 'Logout',
+        danger: true
+      });
       if (!confirm) return;
 
       if (this.currentUser) {
@@ -638,10 +709,12 @@ export class GithubSidebar {
     }
 
     if (!forceAll) {
-      const confirm = await acode.confirm(
-        'Logout GitHub Manager',
-        'Are you sure you want to log out and clear saved GitHub credentials?'
-      );
+      const confirm = await fluentConfirm({
+        title: 'Logout GitHub Manager',
+        message: 'Are you sure you want to log out and clear saved GitHub credentials?',
+        confirmText: 'Log Out',
+        danger: true
+      });
       if (!confirm) return;
     }
 
@@ -654,14 +727,81 @@ export class GithubSidebar {
     this.repoManager.setApi(null);
     this.repoManager.setCurrentUser(null);
     this.repoManager.setOrgs([]);
+    this.selectedOrg = null;
+    this.orgs = [];
+    this.contextSelect = null;
 
     if (this.refreshIntervalId) {
       clearInterval(this.refreshIntervalId);
       this.refreshIntervalId = null;
     }
 
-    window.toast('Logged out successfully', 2500);
+    showToast('Logged out successfully', 'info', 2500);
     await this.render();
+  }
+
+  updateContextSelect(): void {
+    const contextWrap = document.getElementById('gh-global-context-wrap');
+    if (!contextWrap) return;
+
+    const options: DropdownOption[] = [
+      {
+        value: '',
+        label: this.currentUser?.login || 'me',
+        icon: lucideIcons.user,
+        avatarUrl: this.currentUser?.avatar_url
+      },
+      ...this.orgs.map((org) => ({
+        value: org.login,
+        label: org.login,
+        icon: lucideIcons.building,
+        avatarUrl: org.avatar_url
+      }))
+    ];
+
+    if (this.contextSelect) {
+      this.contextSelect.setOptions(options, this.selectedOrg || '');
+    } else {
+      this.contextSelect = new CustomSelectComponent({
+        container: contextWrap,
+        id: 'gh-global-context-select',
+        prefixIcon: lucideIcons.building,
+        options,
+        selectedValue: this.selectedOrg || '',
+        onChange: (val) => {
+          this.switchContext(val || null);
+        }
+      });
+    }
+  }
+
+  switchContext(org: string | null): void {
+    this.selectedOrg = org;
+    if (this.contextSelect) {
+      this.contextSelect.setSelectedValue(org);
+    }
+    this.repoManager.setSelectedOrg(org);
+    this.gistManager.setSelectedOrg(org);
+    if (org && this.activeTab === 'gists') {
+      const reposTab = document.querySelector<HTMLElement>('#tab-repos');
+      reposTab?.click();
+    }
+    this.updateTabCounts();
+  }
+
+  updateTabCounts(): void {
+    const reposCountBadge = document.getElementById('tab-repos-count');
+    if (reposCountBadge) {
+      reposCountBadge.textContent = String(this.repoManager.repos.length);
+    }
+    const gistsCountBadge = document.getElementById('tab-gists-count');
+    if (gistsCountBadge) {
+      if (this.selectedOrg) {
+        gistsCountBadge.textContent = '0';
+      } else {
+        gistsCountBadge.textContent = String(this.gistManager.gists.length);
+      }
+    }
   }
 
   async destroy(): Promise<void> {

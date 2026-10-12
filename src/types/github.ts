@@ -16,7 +16,7 @@ export interface GitHubOrg {
 }
 
 export interface GitHubAccount {
-  id: string; // username
+  id: string;
   login: string;
   name?: string;
   avatar_url?: string;
@@ -41,12 +41,19 @@ export interface GitHubRepo {
   name: string;
   full_name: string;
   private: boolean;
+  fork?: boolean;
   owner: GitHubRepoOwner;
   html_url: string;
   description: string | null;
   default_branch: string;
   stargazers_count: number;
+  forks_count?: number;
   language: string | null;
+  updated_at?: string;
+  created_at?: string;
+  pushed_at?: string;
+  size?: number;
+  open_issues_count?: number;
   permissions?: GitHubRepoPermissions;
 }
 
@@ -67,6 +74,7 @@ export interface GitHubGist {
   files: Record<string, GitHubGistFile>;
   created_at: string;
   updated_at: string;
+  owner?: GitHubUser | null;
 }
 
 export interface GitHubBranch {
@@ -147,4 +155,118 @@ export interface RepoContext {
   owner: string;
   repo: string;
   defaultBranch: string;
+}
+
+export interface GitHubIssueLabel {
+  id: number;
+  name: string;
+  color: string;
+  description?: string;
+}
+
+export interface GitHubIssue {
+  id: number;
+  number: number;
+  title: string;
+  body: string | null;
+  state: 'open' | 'closed';
+  user: GitHubUser;
+  labels: GitHubIssueLabel[];
+  comments: number;
+  created_at: string;
+  updated_at: string;
+  closed_at?: string | null;
+  pull_request?: any;
+  html_url: string;
+}
+
+export interface GitHubIssueComment {
+  id: number;
+  user: GitHubUser;
+  body: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GitHubPullRequest {
+  id: number;
+  number: number;
+  title: string;
+  body: string | null;
+  state: 'open' | 'closed';
+  user: GitHubUser;
+  created_at: string;
+  updated_at: string;
+  merged_at?: string | null;
+  html_url: string;
+  head: {
+    ref: string;
+    sha: string;
+    repo?: GitHubRepo;
+  };
+  base: {
+    ref: string;
+    sha: string;
+  };
+  mergeable?: boolean | null;
+  comments?: number;
+  commits?: number;
+  additions?: number;
+  deletions?: number;
+  changed_files?: number;
+}
+
+export interface GitHubPullFile {
+  sha: string;
+  filename: string;
+  status: string;
+  additions: number;
+  deletions: number;
+  changes: number;
+  patch?: string;
+}
+
+export interface GitHubReleaseAsset {
+  id: number;
+  name: string;
+  size: number;
+  download_count: number;
+  browser_download_url: string;
+}
+
+export interface GitHubRelease {
+  id: number;
+  tag_name: string;
+  name: string | null;
+  body: string | null;
+  draft: boolean;
+  prerelease: boolean;
+  created_at: string;
+  published_at?: string;
+  author: GitHubUser;
+  assets: GitHubReleaseAsset[];
+  tarball_url: string;
+  zipball_url: string;
+}
+
+export interface GitHubWorkflowRun {
+  id: number;
+  name: string;
+  head_branch: string;
+  head_sha: string;
+  status: 'queued' | 'in_progress' | 'completed';
+  conclusion: 'success' | 'failure' | 'neutral' | 'cancelled' | 'timed_out' | 'action_required' | null;
+  event: string;
+  created_at: string;
+  updated_at: string;
+  html_url: string;
+  run_number: number;
+}
+
+export interface GitHubSSHKey {
+  id: number;
+  key: string;
+  title: string;
+  created_at: string;
+  verified?: boolean;
 }

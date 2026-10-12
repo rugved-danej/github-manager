@@ -1,16 +1,27 @@
+import { fluentConfirm, fluentPrompt, fluentAlert } from '../ui/dialog';
+import { showToast } from '../ui/toast';
+import { logger } from '../utils/logger';
 import type { RepoManager } from './manager';
 import type { LocalFileEntry } from '../types/plugin';
 
 export async function handleCreateRepo(manager: RepoManager): Promise<void> {
   if (!manager.api) {
-    acode.alert('Error', 'API client not initialized. Please login first.');
+    fluentAlert('Error', 'API client not initialized. Please login first.');
     return;
   }
 
-  const name = await acode.prompt('Repository Name', 'new-acode-repo');
+  const name = await fluentPrompt({
+    title: 'Repository Name',
+    defaultValue: 'new-acode-repo',
+    placeholder: 'Enter repository name...'
+  });
   if (!name) return;
 
-  const description = await acode.prompt('Description', 'Created via Acode');
+  const description = await fluentPrompt({
+    title: 'Repository Description',
+    defaultValue: 'Created via Acode',
+    placeholder: 'Enter repository description...'
+  });
   if (description === null) return;
 
   const visibility = await acode.select('Visibility', [
@@ -33,23 +44,25 @@ export async function handleCreateRepo(manager: RepoManager): Promise<void> {
   }
 
   try {
-    window.toast('Creating repository...', 2000);
+    showToast('Creating repository...', 'info', 2000);
     const newRepo = await manager.api.createRepo(name, description, visibility === 'private', true, targetOrg);
     manager.repos.unshift(newRepo);
     manager.renderRepos();
-    window.toast('Repository created!', 3000);
+    showToast('Repository created!', 'success');
 
-    const addCode = await acode.confirm(
-      'Starting Code',
-      'Do you want to initialize this repository with code from a local folder?'
-    );
+    const addCode = await fluentConfirm({
+      title: 'Initialize with Code?',
+      message: 'Do you want to initialize this repository with code from a local folder?',
+      confirmText: 'Select Folder',
+      cancelText: 'Skip'
+    });
     if (addCode) {
       const fileBrowser = acode.require('fileBrowser');
       const fsOperation = acode.require('fsOperation');
       const dest = await fileBrowser('folder', 'Select the local folder');
       if (!dest || !dest.url) return;
 
-      window.toast('Reading local folder...', 2000);
+      showToast('Reading local folder...', 'info', 2000);
 
       const ignoreRules = await manager.getIgnoreRules(dest.url);
 
@@ -72,7 +85,9 @@ export async function handleCreateRepo(manager: RepoManager): Promise<void> {
             try {
               const content = await fsOperation(item.url).readFile('utf-8');
               files.push({ path: itemPath, content });
-            } catch (e) {}
+            } catch (e) {
+              logger.warn(`Could not read file ${itemPath}:`, e);
+            }
           }
         }
         return files;
@@ -81,7 +96,7 @@ export async function handleCreateRepo(manager: RepoManager): Promise<void> {
       const allFiles = await readDirRecursive(dest.url);
 
       if (allFiles.length > 0) {
-        window.toast(`Committing ${allFiles.length} files...`, 2000);
+        showToast(`Committing ${allFiles.length} files...`, 'info', 2000);
         const branch = newRepo.default_branch || 'main';
         await manager.api.commitMultipleFiles(
           newRepo.owner.login,
@@ -90,10 +105,11 @@ export async function handleCreateRepo(manager: RepoManager): Promise<void> {
           'Initial commit from Acode',
           allFiles
         );
-        window.toast('Code pushed successfully!', 3000);
+        showToast('Code pushed successfully!', 'success');
       }
     }
   } catch (err: any) {
-    acode.alert('Error', err.message || String(err));
+    logger.error('Failed to create repository:', err);
+    fluentAlert('Error', err.message || String(err));
   }
 }

@@ -194,13 +194,6 @@ export class AuthVault {
     return localStorage.getItem(ACTIVE_ACCOUNT_KEY);
   }
 
-  /**
-   * Recovers credentials across all 4 persistence layers:
-   * 1. localStorage (fast access)
-   * 2. DATA_STORAGE/.github_manager_auth_vault.json (survives plugin uninstall & reinstall)
-   * 3. Keychain secure storage (survives plugin uninstall & reinstall)
-   * 4. Acode global settings (survives plugin uninstall & reinstall)
-   */
   static async recover(): Promise<{
     accounts: GitHubAccount[];
     activeAccountId: string | null;
@@ -219,10 +212,8 @@ export class AuthVault {
       };
     }
 
-    // If localStorage was cleared (e.g. freshly reinstalled after uninstall), recover from external layers
     let vaultData: PersistentAuthVault | null = null;
 
-    // Layer A: DATA_STORAGE file
     const fileContent = await readFileFromDataStorage(VAULT_FILE_NAME);
     if (fileContent) {
       try {
@@ -233,7 +224,6 @@ export class AuthVault {
       } catch {}
     }
 
-    // Layer B: Keychain
     if (!vaultData) {
       const kcVal = await readFromKeychain(KEYCHAIN_VAULT_KEY);
       if (kcVal) {
@@ -246,7 +236,6 @@ export class AuthVault {
       }
     }
 
-    // Layer C: Global Settings
     if (!vaultData) {
       const setVal = readFromSettings(SETTINGS_VAULT_KEY);
       if (setVal) {
@@ -259,7 +248,6 @@ export class AuthVault {
       }
     }
 
-    // If vault was recovered, resynchronize to all layers and return
     if (vaultData && vaultData.accounts.length > 0) {
       accounts = vaultData.accounts;
       activeId = vaultData.activeAccountId || accounts[0]?.id || null;
@@ -271,7 +259,6 @@ export class AuthVault {
       return { accounts, activeAccountId: activeId, token };
     }
 
-    // Fallback: Check single legacy token in keychain or localStorage
     const kcToken = await readFromKeychain(KEYCHAIN_TOKEN_KEY);
     if (kcToken) {
       token = kcToken;
@@ -281,9 +268,6 @@ export class AuthVault {
     return { accounts: [], activeAccountId: null, token: token || null };
   }
 
-  /**
-   * Persists credentials across all 4 layers.
-   */
   static async save(
     accounts: GitHubAccount[],
     activeAccountId: string | null,
@@ -297,7 +281,6 @@ export class AuthVault {
     };
     const json = JSON.stringify(payload);
 
-    // 1. LocalStorage
     try {
       localStorage.setItem(ACCOUNTS_STORAGE_KEY, JSON.stringify(accounts));
       if (activeAccountId) {
@@ -310,7 +293,6 @@ export class AuthVault {
       }
     } catch {}
 
-    // 2. Keychain
     try {
       await writeToKeychain(KEYCHAIN_VAULT_KEY, json);
       if (activeToken) {
@@ -321,35 +303,26 @@ export class AuthVault {
       }
     } catch {}
 
-    // 3. File System Vault
     try {
       await writeFileToDataStorage(VAULT_FILE_NAME, json);
     } catch {}
 
-    // 4. Global Settings
     try {
       writeToSettings(SETTINGS_VAULT_KEY, json);
     } catch {}
   }
 
-  /**
-   * Only called when user explicitly logs out completely.
-   */
   static async clearAll(): Promise<void> {
-    // 1. LocalStorage
     localStorage.removeItem(ACCOUNTS_STORAGE_KEY);
     localStorage.removeItem(ACTIVE_ACCOUNT_KEY);
     localStorage.removeItem(LEGACY_TOKEN_KEY);
 
-    // 2. Keychain
     await deleteFromKeychain(KEYCHAIN_VAULT_KEY);
     await deleteFromKeychain(KEYCHAIN_TOKEN_KEY);
     await deleteFromKeychain(KEYCHAIN_ACTIVE_KEY);
 
-    // 3. File System
     await deleteFileFromDataStorage(VAULT_FILE_NAME);
 
-    // 4. Settings
     deleteFromSettings(SETTINGS_VAULT_KEY);
   }
 }

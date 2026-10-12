@@ -1,5 +1,10 @@
 import { getFileIcon, lucideIcons, isImageFile, getImageMime } from '../ui/icons';
-import { openImageViewer, imageToDataUrl } from '../ui/imageViewer';
+import { openInAcodeImageTab, imageToDataUrl } from '../ui/imageViewer';
+import { renderLoadingState, renderEmptyState, renderErrorState } from '../ui/states';
+import { fluentAlert } from '../ui/dialog';
+import { showToast } from '../ui/toast';
+import { logger } from '../utils/logger';
+import { formatFileSize, copyToClipboard, closeSidebar } from '../utils/format';
 import type { RepoManager } from './manager';
 import type { GitHubContentItem } from '../types/github';
 
@@ -24,6 +29,22 @@ export async function openRepo(
     if (loadMore) loadMore.style.display = 'none';
 
     await manager.loadBranches(owner, repo);
+    manager.updateStarUI(owner, repo);
+    if (manager.api) {
+      manager.api.isRepoStarred(owner, repo).then((isStarred) => {
+        const key = `${owner}/${repo}`;
+        if (isStarred) {
+          manager.starredRepoNames.add(key);
+          manager.starredRepoNames.add(repo);
+        } else {
+          manager.starredRepoNames.delete(key);
+          manager.starredRepoNames.delete(repo);
+        }
+        manager.updateStarUI(owner, repo);
+      });
+    }
+  } else {
+    manager.updateStarUI(owner, repo);
   }
 
   manager.currentPath = path;
@@ -32,10 +53,16 @@ export async function openRepo(
   const list = document.getElementById('repos-list');
   if (!list) return;
 
-  list.innerHTML = '<p class="gh-text-muted" style="padding: 16px 0;">Loading contents...</p>';
+  list.innerHTML = renderLoadingState({
+    title: 'Loading Folder Contents...',
+    subtitle: `Browsing ${path || 'root repository directory'}`
+  });
 
   if (!manager.api) {
-    list.innerHTML = '<p class="gh-text-muted" style="color: #f85149;">API client not initialized.</p>';
+    list.innerHTML = renderErrorState({
+      title: 'Not Initialized',
+      message: 'API client is not ready. Please check login.'
+    });
     return;
   }
 
@@ -44,7 +71,11 @@ export async function openRepo(
     list.innerHTML = '';
 
     if (contents.length === 0) {
-      list.innerHTML = '<p class="gh-text-muted" style="padding: 16px 0;">Folder is empty.</p>';
+      list.innerHTML = renderEmptyState({
+        icon: lucideIcons.folderOpen,
+        title: 'Folder is Empty',
+        message: 'No files or folders found in this directory.'
+      });
       return;
     }
 
@@ -58,24 +89,24 @@ export async function openRepo(
         const div = document.createElement('div');
         div.className = 'gh-file-row';
         const isDir = item.type === 'dir';
-        const isImg = isImageFile(item.name);
 
         div.innerHTML = `
           <div class="gh-file-left" title="${item.name}">
             ${getFileIcon(item.name, isDir)}
             <span class="gh-file-name" style="${isDir ? 'font-weight: 600;' : ''}">${item.name}</span>
+            ${!isDir && item.size ? `<span class="gh-file-size">${formatFileSize(item.size)}</span>` : ''}
           </div>
-          ${
-            isDir
-              ? ''
-              : `
           <div class="gh-file-actions">
-            <button class="gh-btn-icon gh-btn-icon-primary open-file" title="${isImg ? 'Preview Image' : 'Open in Acode'}">
-              ${isImg ? lucideIcons.eye : lucideIcons.code}
-            </button>
+            ${
+              isDir
+                ? `<span style="color: var(--gh-text-muted); display: flex; align-items: center; opacity: 0.7;">${lucideIcons.chevronRight}</span>`
+                : `
+              <button class="gh-btn-icon copy-file-url" data-url="${item.download_url || ''}" title="Copy Raw Download URL">
+                ${lucideIcons.copy}
+              </button>
+            `
+            }
           </div>
-          `
-          }
         `;
 
         const leftEl = div.querySelector<HTMLElement>('.gh-file-left');
@@ -86,11 +117,14 @@ export async function openRepo(
           };
         }
 
-        if (!isDir) {
-          const openBtn = div.querySelector<HTMLElement>('.open-file');
-          if (openBtn) {
-            openBtn.onclick = () => manager.openFile(item);
-          }
+        const copyBtn = div.querySelector<HTMLElement>('.copy-file-url');
+        if (copyBtn) {
+          copyBtn.onclick = async (e) => {
+            e.stopPropagation();
+            const url = (e.currentTarget as HTMLElement).dataset.url || '';
+            const ok = await copyToClipboard(url);
+            showToast(ok ? 'File download URL copied!' : 'Failed to copy URL', ok ? 'success' : 'error');
+          };
         }
 
         card.appendChild(div);
@@ -98,17 +132,19 @@ export async function openRepo(
 
     list.appendChild(card);
   } catch (err: any) {
-    list.innerHTML = `<p class="gh-text-muted" style="color: #f85149; padding: 16px 0;">${err.message || 'Error loading path.'}</p>`;
+    list.innerHTML = renderErrorState({
+      title: 'Failed to Load Folder',
+      message: err?.message || 'Could not retrieve repository contents.'
+    });
   }
 }
 
 export async function openFile(manager: RepoManager, item: GitHubContentItem): Promise<void> {
   if (!manager.currentRepo || !manager.api) return;
 
-  // Image files preview
   if (isImageFile(item.name)) {
     try {
-      window.toast('Loading image...', 1500);
+      showToast('Loading image...', 'info', 1500);
       let data: string | ArrayBuffer;
       try {
         data = await manager.api.downloadBlob(
@@ -125,7 +161,6 @@ export async function openFile(manager: RepoManager, item: GitHubContentItem): P
         }
       }
 
-      // Check if Git LFS pointer text was returned
       if (typeof data !== 'string') {
         const bytes = new Uint8Array(data);
         if (bytes.length >= 7 && bytes[0] === 0x76 && bytes[1] === 0x65 && bytes[2] === 0x72) {
@@ -140,26 +175,30 @@ export async function openFile(manager: RepoManager, item: GitHubContentItem): P
 
       const mime = getImageMime(item.name);
       const imgSrc = await imageToDataUrl(data, mime);
+      const uri = `github://${manager.currentRepo?.owner || ''}/${manager.currentRepo?.repo || ''}/${manager.currentBranch || 'main'}/${item.path || item.name}`;
 
-      openImageViewer(item.name, imgSrc, {
-        uri: `github://${manager.currentRepo?.owner || ''}/${manager.currentRepo?.repo || ''}/${manager.currentBranch || 'main'}/${item.path || item.name}`,
-        downloadUrl: item.download_url
-      });
+      const opened = openInAcodeImageTab(item.name, imgSrc, uri);
+      if (opened) {
+        closeSidebar();
+        showToast(`Opened ${item.name} in editor`, 'success', 2000);
+      } else {
+        fluentAlert('Image Error', 'Could not open image in editor tab.');
+      }
       return;
     } catch (err: any) {
-      acode.alert('Image Error', 'Could not display image: ' + (err.message || String(err)));
+      logger.error('Failed to display image:', err);
+      fluentAlert('Image Error', 'Could not display image: ' + (err.message || String(err)));
       return;
     }
   }
 
-  // Non-image binary check
   if (item.name.match(/\.(zip|pdf|exe|bin|apk|mp3|mp4|ttf|woff|woff2|eot|iso|tar|gz)$/i)) {
-    acode.alert('Notice', 'Cannot edit binary files directly in the editor.');
+    fluentAlert('Notice', 'Cannot edit binary files directly in the editor.');
     return;
   }
 
   try {
-    window.toast('Downloading...', 2000);
+    showToast('Downloading...', 'info', 2000);
 
     const data = await manager.api.downloadBlob(
       manager.currentRepo.owner,
@@ -171,8 +210,10 @@ export async function openFile(manager: RepoManager, item: GitHubContentItem): P
     const text = typeof data === 'string' ? data : new TextDecoder('utf-8').decode(data);
 
     acode.newEditorFile(item.name, { text, isUnsaved: false, render: true });
-    window.toast(`Opened ${item.name}`, 2000);
+    closeSidebar();
+    showToast(`Opened ${item.name} in editor`, 'success', 2000);
   } catch (err: any) {
-    acode.alert('Error', 'Could not download file: ' + (err.message || String(err)));
+    logger.error('Failed to download file:', err);
+    fluentAlert('Error', 'Could not download file: ' + (err.message || String(err)));
   }
 }
